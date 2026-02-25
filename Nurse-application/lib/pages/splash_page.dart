@@ -39,8 +39,8 @@ class _SplashPageState extends State<SplashPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: const CustomLoadingScreen(
+    return const Scaffold(
+      body: CustomLoadingScreen(
         message: 'Loading your preferences...',
       ),
     );

@@ -768,6 +768,7 @@ class _ChatbotModalState extends State<ChatbotModal> {
     required Uint8List signatureImage,
     required String newShiftStatus,
     required Function(bool) setLoading,
+    TimeOfDay? actualEndTime,
   }) async {
     setLoading(true);
     try {
@@ -805,11 +806,25 @@ class _ChatbotModalState extends State<ChatbotModal> {
 
       // 3. Update Shift Status (Clock Out & End Early/Cancel)
       final nowUtc = DateTime.now().toUtc();
-      await supabase.from('shift').update({
+
+      // Build the update map
+      final shiftUpdateMap = <String, dynamic>{
         'clock_out': nowUtc.toIso8601String(),
         'shift_status': newShiftStatus,
-        'shift_progress_note': '$requestType: $reason'
-      }).eq('shift_id', shift.shiftId);
+        'shift_progress_note': '$requestType: $reason',
+      };
+
+      // If an actual end time was provided, update shift_end_time
+      if (actualEndTime != null) {
+        final endTimeStr =
+            '${actualEndTime.hour.toString().padLeft(2, '0')}:${actualEndTime.minute.toString().padLeft(2, '0')}:00';
+        shiftUpdateMap['shift_end_time'] = endTimeStr;
+      }
+
+      await supabase
+          .from('shift')
+          .update(shiftUpdateMap)
+          .eq('shift_id', shift.shiftId);
 
       // 4. Clock out from time_logs if exists
       // We need to find the active time log for this user
@@ -937,6 +952,7 @@ class _ChatbotModalState extends State<ChatbotModal> {
       exportBackgroundColor: Colors.white,
     );
     bool isSubmitting = false;
+    TimeOfDay? selectedEndTime;
 
     showDialog(
       context: context,
@@ -1005,6 +1021,82 @@ class _ChatbotModalState extends State<ChatbotModal> {
                     ),
                   ),
                   const SizedBox(height: 16),
+                  // Time input for when the shift actually ended
+                  const Text(
+                    'What time did the shift end?',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  InkWell(
+                    onTap: () async {
+                      final picked = await showTimePicker(
+                        context: context,
+                        initialTime: selectedEndTime ?? TimeOfDay.now(),
+                        helpText: 'SELECT END TIME',
+                      );
+                      if (picked != null) {
+                        setDialogState(() {
+                          selectedEndTime = picked;
+                        });
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 14,
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: selectedEndTime != null
+                              ? Colors.blue.shade300
+                              : Colors.grey.shade400,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                        color: selectedEndTime != null
+                            ? Colors.blue.shade50
+                            : null,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.access_time_rounded,
+                            color: selectedEndTime != null
+                                ? Colors.blue.shade600
+                                : Colors.grey.shade600,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              selectedEndTime != null
+                                  ? selectedEndTime!.format(context)
+                                  : 'Tap to select end time',
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: selectedEndTime != null
+                                    ? Colors.black87
+                                    : Colors.grey.shade500,
+                                fontWeight: selectedEndTime != null
+                                    ? FontWeight.w500
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                          ),
+                          if (selectedEndTime != null)
+                            Icon(
+                              Icons.check_circle,
+                              color: Colors.green.shade600,
+                              size: 20,
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   const Text(
                     'Client booking ended early. Please sign below to confirm ending your shift now.',
                     style: TextStyle(fontSize: 14),
@@ -1046,6 +1138,15 @@ class _ChatbotModalState extends State<ChatbotModal> {
               onPressed: isSubmitting
                   ? null
                   : () async {
+                      if (selectedEndTime == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text(
+                                  'Please select the time the shift ended.')),
+                        );
+                        return;
+                      }
+
                       if (signatureController.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
@@ -1060,9 +1161,11 @@ class _ChatbotModalState extends State<ChatbotModal> {
                       _submitShiftChangeRequest(
                         requestType: 'client_booking_ended_early',
                         shift: shift,
-                        reason: 'Client booking ended early',
+                        reason:
+                            'Client booking ended early at ${selectedEndTime!.format(context)}',
                         signatureImage: signature,
                         newShiftStatus: 'completed',
+                        actualEndTime: selectedEndTime,
                         setLoading: (loading) {
                           setDialogState(() => isSubmitting = loading);
                         },
