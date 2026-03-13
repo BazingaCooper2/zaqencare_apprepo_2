@@ -55,8 +55,19 @@ class _ReportsPageState extends State<ReportsPage> {
       }
 
       // Load shift data from shift table for status counts
-      final shiftsResponse =
-          await supabase.from('shift').select().eq('emp_id', empId);
+      final shiftsResponse = await supabase.from('shift').select('''
+            shift_id,
+            emp_id,
+            client_id,
+            shift_status,
+            shift_start_time,
+            shift_end_time,
+            start_ts,
+            clock_in,
+            clock_out,
+            date,
+            shift_type
+          ''').eq('emp_id', empId);
 
       int completed = 0;
       int inProgress = 0;

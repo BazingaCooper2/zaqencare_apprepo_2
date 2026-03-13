@@ -16,6 +16,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:nurse_tracking_app/services/session.dart';
 import 'package:nurse_tracking_app/services/directions_service.dart';
 import 'package:nurse_tracking_app/config/api_config.dart';
+import '../constants/tables.dart';
 
 class TimeTrackingPage extends StatefulWidget {
   final Employee employee;
@@ -51,6 +52,9 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
   Shift? _activeShift;
   Client? _activeClient;
   bool _loadingActiveShift = false;
+  // Geocoded coordinates for the active client's address.
+  // client_final has no lat/lng column — coords are fetched via backend.
+  List<double>? _geocodedClientLatLng; // [lat, lng]
 
   // Task state
   List<Task> _tasks = [];
@@ -153,24 +157,88 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
   }
 
   Future<Shift?> fetchActiveShift(int empId) async {
-    debugPrint('🚨 Fetching ACTIVE SHIFT via RPC (Single Source of Truth)');
+    debugPrint('🚨 Fetching ACTIVE SHIFT via RPC for emp_id=$empId');
     try {
+      // 1. Try RPC first (Primary logic)
       final response =
           await supabase.rpc('get_active_shift', params: {'p_emp_id': empId});
 
       debugPrint('📥 RPC Raw Response: $response');
 
-      if (response == null) return null;
-
-      if (response is List) {
-        if (response.isEmpty) return null;
+      if (response != null && response is List && response.isNotEmpty) {
+        debugPrint('✅ RPC returned ${response.length} shift(s)');
         return Shift.fromJson(response.first);
-      }
-
-      if (response is Map) {
+      } else if (response is Map) {
+        debugPrint('✅ RPC returned a single shift map');
         return Shift.fromJson(response as Map<String, dynamic>);
       }
 
+      // 2. Fallback: Manual check for scheduled shifts today
+      debugPrint(
+          '⚠️ RPC returned empty/null. Fallback: Checking for today\'s scheduled shifts...');
+      final now = DateTime.now();
+      final todayStr =
+          "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+
+      debugPrint('📅 Querying shifts for emp_id=$empId, date=$todayStr');
+
+      final fallbackResponse = await supabase
+          .from('shift')
+          .select('*')
+          .eq('emp_id', empId)
+          .eq('date', todayStr)
+          .inFilter('shift_status', [
+        'scheduled',
+        'Scheduled',
+        'in_progress',
+        'In Progress'
+      ]).order('shift_start_time', ascending: true);
+
+      debugPrint(
+          '📥 Fallback query returned ${(fallbackResponse as List).length} shift(s)');
+
+      if ((fallbackResponse as List).isNotEmpty) {
+        // Log all found shifts
+        for (int i = 0; i < (fallbackResponse as List).length; i++) {
+          final s = fallbackResponse[i];
+          debugPrint(
+              '  Shift[$i]: id=${s['shift_id']}, client_id=${s['client_id']}, '
+              'status=${s['shift_status']}, date=${s['date']}, '
+              'time=${s['shift_start_time']}-${s['shift_end_time']}, '
+              'task_id=${s['task_id']}');
+        }
+
+        final shifts = (fallbackResponse as List)
+            .map((s) => Shift.fromJson(s as Map<String, dynamic>))
+            .toList();
+
+        Shift? bestMatch;
+        int maxScore = 0;
+
+        // Find the most relevant shift (Currently active > Starting soon > Just ended)
+        for (final shift in shifts) {
+          final score = shift.shiftTimeScore;
+          debugPrint('  Shift ${shift.shiftId} score=$score');
+          if (score > maxScore) {
+            maxScore = score;
+            bestMatch = shift;
+            if (maxScore == 3) break; // Found an active one, can't get better
+          }
+        }
+
+        if (bestMatch != null) {
+          debugPrint(
+              '✅ Found best matching scheduled shift for today: ${bestMatch.shiftId} (Score: $maxScore)');
+          return bestMatch;
+        }
+
+        // If none strictly match the time window, fallback to the first shift of the day
+        debugPrint(
+            '⚠️ No currently active shift found today. Defaulting to first scheduled shift: ${shifts.first.shiftId}');
+        return shifts.first;
+      }
+
+      debugPrint('❌ No shifts found for emp_id=$empId on $todayStr');
       return null;
     } catch (e) {
       debugPrint('❌ Error fetching active shift: $e');
@@ -185,7 +253,10 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
 
     try {
       final empId = await SessionManager.getEmpId();
+      debugPrint('🔑 SessionManager emp_id = $empId');
+
       if (empId == null) {
+        debugPrint('❌ emp_id is null! User may not be logged in.');
         setState(() {
           _loadingActiveShift = false;
         });
@@ -195,45 +266,40 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
       final shift = await fetchActiveShift(empId);
 
       if (shift != null) {
-        // Fetch client details if client_id exists
-        Client? client;
-        if (shift.clientId != null) {
+        debugPrint(
+            '✅ Active shift found: id=${shift.shiftId}, client_id=${shift.clientId}, task_id=${shift.taskId}');
+
+        // Priority 1: Use nested client if available
+        Client? client = shift.client;
+
+        // Priority 2: Manual fetch if nested data missing
+        if (client == null && shift.clientId != null) {
+          debugPrint(
+              '🔍 Fetching client data for client_id=${shift.clientId}...');
           final clientResponse = await supabase
-              .from('client')
+              .from(Tables.client)
               .select('*')
-              .eq('client_id', shift.clientId!)
+              .eq('id', shift.clientId!)
               .limit(1);
 
           if (clientResponse.isNotEmpty) {
             client = Client.fromJson(clientResponse.first);
+            debugPrint('✅ Client loaded: ${client.fullName}');
+          } else {
+            debugPrint('⚠️ No client found for client_id=${shift.clientId}');
+          }
+        }
 
-            // Auto-Geocode using Backend if coordinates are missing
-            if (client.locationCoordinates == null &&
-                client.fullAddress.isNotEmpty) {
-              final coords =
-                  await _fetchCoordinatesFromBackend(client.fullAddress);
-
-              if (coords != null) {
-                final lat = coords['latitude'];
-                final lng = coords['longitude'];
-                final locationStr = '$lat,$lng';
-
-                debugPrint(
-                    '✅ Geocoded "$locationStr" via backend. Updating DB...');
-
-                // Update DB
-                await supabase
-                    .from('client')
-                    .update({'patient_location': locationStr}).eq(
-                        'client_id', client.clientId);
-
-                // Update local object
-                var updatedMap =
-                    Map<String, dynamic>.from(clientResponse.first);
-                updatedMap['patient_location'] = locationStr;
-                client = Client.fromJson(updatedMap);
-              }
-            }
+        // Geocode the client address
+        if (client != null && client.fullAddress.isNotEmpty) {
+          final coords = await _fetchCoordinatesFromBackend(client.fullAddress);
+          if (coords != null) {
+            final lat = (coords['latitude'] as num).toDouble();
+            final lng = (coords['longitude'] as num).toDouble();
+            setState(() {
+              _geocodedClientLatLng = [lat, lng];
+            });
+            debugPrint('✅ Geocoded ${client.fullAddress} → $lat,$lng');
           }
         }
 
@@ -303,12 +369,56 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
   }
 
   void _startLocationPolling() {
-    // Poll GPS every 10 seconds
-    _locationTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
-      await _updateLocation();
-    });
+    // Use a continuous position stream for real-time, accurate location
+    final locationSettings = AndroidSettings(
+      accuracy: LocationAccuracy.high,
+      distanceFilter: 5, // Only fire when moved ≥5 meters
+      intervalDuration: const Duration(seconds: 5),
+      forceLocationManager:
+          true, // Use LocationManager for more reliable updates
+    );
 
-    // Initial location update
+    _positionSubscription = Geolocator.getPositionStream(
+      locationSettings: locationSettings,
+    ).listen(
+      (Position position) async {
+        debugPrint(
+            '📍 Location stream: ${position.latitude}, ${position.longitude} (accuracy: ${position.accuracy}m)');
+
+        if (!mounted) return;
+
+        setState(() {
+          _currentPosition = position;
+        });
+
+        // Update address if not already set
+        _currentAddress ??=
+            await _reverseGeocode(position.latitude, position.longitude);
+
+        // Center camera on user location first time
+        if (!_hasCenteredOnUser && _mapController != null) {
+          await _mapController!.animateCamera(
+            CameraUpdate.newLatLngZoom(
+              LatLng(position.latitude, position.longitude),
+              16,
+            ),
+          );
+          _hasCenteredOnUser = true;
+          debugPrint('🎯 Centered map on user location');
+        }
+
+        // Check for geofence entry at assisted living locations
+        await _checkGeofenceEntry(position);
+
+        // Update map markers
+        _updateMapMarkers();
+      },
+      onError: (error) {
+        debugPrint('❌ Location stream error: $error');
+      },
+    );
+
+    // Also do one immediate fetch so we don't wait for the stream's first event
     _updateLocation();
   }
 
@@ -316,10 +426,13 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
     try {
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 10),
       );
 
       debugPrint(
-          '📍 Location updated: ${position.latitude}, ${position.longitude}');
+          '📍 Location updated: ${position.latitude}, ${position.longitude} (accuracy: ${position.accuracy}m)');
+
+      if (!mounted) return;
 
       setState(() {
         _currentPosition = position;
@@ -346,10 +459,11 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
 
       // Update map markers
       _updateMapMarkers();
-      // _updateRouteToClient(); // Disabled to save API calls (User triggered only)
     } catch (e) {
       debugPrint('❌ Location error: $e');
-      _showSnackBar('Location error: $e', isError: true);
+      if (mounted) {
+        _showSnackBar('Location error: $e', isError: true);
+      }
     }
   }
 
@@ -360,7 +474,8 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
 
     // Check dynamic client location (Active Shift)
     if (_activeClient != null) {
-      final coords = _activeClient!.locationCoordinates;
+      // Use geocoded coords from state (client_final has no lat/lng column)
+      final coords = _geocodedClientLatLng;
       if (coords != null && coords.length >= 2) {
         final clientLat = coords[0];
         final clientLng = coords[1];
@@ -438,7 +553,8 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
             final cName = _activeClient!.fullName;
 
             if (_currentPlaceName == sType || _currentPlaceName == cName) {
-              final coords = _activeClient!.locationCoordinates;
+              // Use geocoded coords from state
+              final coords = _geocodedClientLatLng;
               if (coords != null && coords.length >= 2) {
                 targetLat = coords[0];
                 targetLng = coords[1];
@@ -473,8 +589,8 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
   Future<void> _updateRouteToClient() async {
     if (_activeClient == null) return;
 
-    // Use fallback to URL Launch if coordinates missing or backend route fails
-    final coordinates = _activeClient!.locationCoordinates;
+    // Use geocoded coords stored in state
+    final coordinates = _geocodedClientLatLng;
 
     if (coordinates == null || coordinates.length < 2) return;
 
@@ -535,11 +651,11 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
   Future<void> _launchExternalMaps() async {
     if (_activeClient == null) return;
 
-    final coordinates = _activeClient!.locationCoordinates;
+    final coordinates = _geocodedClientLatLng; // Use geocoded state
     String url;
 
     if (coordinates != null && coordinates.length >= 2) {
-      // Use coordinates
+      // Use geocoded coordinates
       url =
           'https://www.google.com/maps/dir/?api=1&destination=${coordinates[0]},${coordinates[1]}';
     } else if (_activeClient!.fullAddress.isNotEmpty) {
@@ -839,7 +955,8 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
           .any((k) => k.toLowerCase() == clientServiceType.toLowerCase());
 
       if (!isKnownLocation) {
-        final coordinates = _activeClient!.locationCoordinates;
+        // Use geocoded state coords for dynamic client marker
+        final coordinates = _geocodedClientLatLng;
         if (coordinates != null && coordinates.length >= 2) {
           _markers.add(
             Marker(
@@ -910,11 +1027,87 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
 
     setState(() {
       _loadingTasks = true;
-      _loadingTasks = true;
     });
 
     try {
-      // 1. Try fetching by shift_id (Standard Foreign Key)
+      // ──────────────────────────────────────────────────────
+      // 1. PRIMARY: Parse shift.task_id comma-separated string
+      //    e.g. "task1,task2,task3,task4,task5"
+      // ──────────────────────────────────────────────────────
+      if (_activeShift!.taskId != null && _activeShift!.taskId!.contains(',')) {
+        final parsed = Task.fromCommaSeparated(
+          _activeShift!.taskId,
+          shiftId: _activeShift!.shiftId,
+        );
+        if (parsed.isNotEmpty) {
+          debugPrint(
+              '✅ _loadTasks: Loaded ${parsed.length} tasks from shift.task_id (comma-separated)');
+          if (mounted) {
+            setState(() {
+              _tasks = parsed;
+              _loadingTasks = false;
+            });
+          }
+          return;
+        }
+      }
+
+      // ──────────────────────────────────────────────────────
+      // 2. Fetch tasks from client_final.tasks JSONB
+      // ──────────────────────────────────────────────────────
+      // a) Check if we already have client data with tasks
+      if (_activeClient != null && _activeClient!.tasks != null) {
+        final clientTasks = Task.fromClientTasksJson(
+          _activeClient!.tasks,
+          shiftId: _activeShift!.shiftId,
+        );
+        if (clientTasks.isNotEmpty) {
+          debugPrint(
+              '✅ _loadTasks: Loaded ${clientTasks.length} tasks from activeClient.tasks');
+          if (mounted) {
+            setState(() {
+              _tasks = clientTasks;
+              _loadingTasks = false;
+            });
+          }
+          return;
+        }
+      }
+
+      // b) Fetch tasks directly from client_final table via client_id
+      if (_activeShift!.clientId != null) {
+        try {
+          final clientResponse = await supabase
+              .from(Tables.client)
+              .select('tasks')
+              .eq('id', _activeShift!.clientId!)
+              .maybeSingle();
+
+          if (clientResponse != null && clientResponse['tasks'] != null) {
+            final clientTasks = Task.fromClientTasksJson(
+              clientResponse['tasks'],
+              shiftId: _activeShift!.shiftId,
+            );
+            if (clientTasks.isNotEmpty) {
+              debugPrint(
+                  '✅ _loadTasks: Loaded ${clientTasks.length} tasks from client_final.tasks (DB)');
+              if (mounted) {
+                setState(() {
+                  _tasks = clientTasks;
+                  _loadingTasks = false;
+                });
+              }
+              return;
+            }
+          }
+        } catch (e) {
+          debugPrint('⚠️ _loadTasks: Error fetching client_final.tasks: $e');
+        }
+      }
+
+      // ──────────────────────────────────────────────────────
+      // 3. Fallback: Legacy tasks table by shift_id
+      // ──────────────────────────────────────────────────────
       var response = await supabase
           .from('tasks')
           .select('*')
@@ -924,10 +1117,10 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
       debugPrint(
           '📥 _loadTasks: Found ${response.length} tasks by shift_id=${_activeShift!.shiftId}');
 
-      // 2. Fallback: If no tasks found by shift_id, try linking via shift.task_id (Business ID)
+      // 4. Fallback: try shift.task_id as a single task_code
       if (response.isEmpty && _activeShift!.taskId != null) {
         debugPrint(
-            '⚠️ No tasks by shift_id. Attempting fallback via shift.task_id (task_code): ${_activeShift!.taskId}');
+            '⚠️ No tasks by shift_id. Attempting fallback via task_code: ${_activeShift!.taskId}');
 
         final shiftTaskCode = _activeShift!.taskId!;
 
@@ -951,10 +1144,9 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
           _loadingTasks = false;
         });
 
-        // If still empty, it might be RLS or data not inserted
         if (tasks.isEmpty) {
           debugPrint(
-              '⚠️ _tasks is empty. Possible reasons: 1. No data in "tasks" table. 2. shift_id mismatch. 3. RLS policy hiding rows.');
+              '⚠️ _tasks is empty. No data in shift.task_id, client_final.tasks, or "tasks" table.');
         }
       }
     } catch (e) {
@@ -982,24 +1174,27 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
         details: task.details,
         status: value,
         comment: task.comment,
-        taskCode: task.taskCode);
+        taskCode: task.taskCode,
+        isFromClient: task.isFromClient,
+        isFromShiftTaskId: task.isFromShiftTaskId);
 
     setState(() {
       _tasks[index] = updatedTask;
     });
 
-    // 2. Auto-Save to DB
-    try {
-      await supabase
-          .from('tasks')
-          .update({'status': value}).eq('task_id', task.taskId);
-      // debugPrint('✅ Task ${task.taskId} saved via Auto-Save');
-    } catch (e) {
-      debugPrint('❌ Error auto-saving task: $e');
-      _showSnackBar('Values did not save to server. Check connection.',
-          isError: true);
-      // Revert optimization? For now, we leave it and hope next sync fixes it.
+    // 2. Only persist to legacy tasks table if NOT a local task
+    if (!task.isLocal) {
+      try {
+        await supabase
+            .from('tasks')
+            .update({'status': value}).eq('task_id', task.taskId);
+      } catch (e) {
+        debugPrint('❌ Error auto-saving task: $e');
+        _showSnackBar('Values did not save to server. Check connection.',
+            isError: true);
+      }
     }
+    // Local tasks (from shift.task_id or client.tasks) toggle in-memory only
   }
 
   Future<void> _handleClockOut() async {
@@ -1101,12 +1296,9 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
   }
 
   LatLng _getInitialCameraPosition() {
-    // If we have active client location, center there; otherwise average of locations
-    if (_activeClient != null) {
-      final coordinates = _activeClient!.locationCoordinates;
-      if (coordinates != null && coordinates.length >= 2) {
-        return LatLng(coordinates[0], coordinates[1]);
-      }
+    // If we have geocoded client location, center there
+    if (_geocodedClientLatLng != null && _geocodedClientLatLng!.length >= 2) {
+      return LatLng(_geocodedClientLatLng![0], _geocodedClientLatLng![1]);
     }
 
     // Average of the three assisted living locations
@@ -1125,16 +1317,15 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
   }
 
   Future<void> _moveCameraToClient() async {
-    if (_activeClient != null && _mapController != null) {
-      final coordinates = _activeClient!.locationCoordinates;
-      if (coordinates != null && coordinates.length >= 2) {
-        await _mapController!.animateCamera(
-          CameraUpdate.newLatLngZoom(
-            LatLng(coordinates[0], coordinates[1]),
-            18, // High zoom for precision
-          ),
-        );
-      }
+    if (_mapController != null &&
+        _geocodedClientLatLng != null &&
+        _geocodedClientLatLng!.length >= 2) {
+      await _mapController!.animateCamera(
+        CameraUpdate.newLatLngZoom(
+          LatLng(_geocodedClientLatLng![0], _geocodedClientLatLng![1]),
+          18, // High zoom for precision
+        ),
+      );
     }
   }
 
@@ -1237,9 +1428,7 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (_activeClient != null &&
-                    _activeClient!.locationCoordinates != null &&
-                    _activeClient!.locationCoordinates!.length >= 2) ...[
+                if (_geocodedClientLatLng != null) ...[
                   FloatingActionButton(
                     heroTag: 'client_loc_fab',
                     onPressed: _moveCameraToClient,
@@ -1537,15 +1726,12 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
                                               ),
                                             ],
                                             if (_currentPosition != null &&
-                                                _activeClient!
-                                                        .locationCoordinates !=
+                                                _geocodedClientLatLng !=
                                                     null) ...[
                                               const SizedBox(height: 4),
                                               Row(
                                                 children: [
-                                                  Icon(
-                                                      Icons
-                                                          .directions_car, // Changed to car
+                                                  Icon(Icons.directions_car,
                                                       size: 14,
                                                       color:
                                                           Colors.blue.shade400),
@@ -1560,10 +1746,10 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
                                                                   .latitude,
                                                               _currentPosition!
                                                                   .longitude,
-                                                              _activeClient!
-                                                                  .locationCoordinates![0],
-                                                              _activeClient!
-                                                                  .locationCoordinates![1],
+                                                              _geocodedClientLatLng![
+                                                                  0],
+                                                              _geocodedClientLatLng![
+                                                                  1],
                                                             ) / 1000).toStringAsFixed(2)} km away',
                                                     style: TextStyle(
                                                       color:
@@ -1705,18 +1891,14 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
                                 onPressed: (_tasks.isNotEmpty &&
                                         _tasks.every((t) => t.status) &&
                                         _currentPosition != null &&
-                                        _activeClient?.locationCoordinates !=
-                                            null &&
-                                        _calculateDistance(
-                                                _currentPosition!.latitude,
-                                                _currentPosition!.longitude,
-                                                _activeClient!
-                                                    .locationCoordinates![0],
-                                                _activeClient!
-                                                    .locationCoordinates![1]) <
-                                            (_geofenceRadius +
-                                                200) // Relaxed check
-                                        &&
+                                        // Allow clock-out if geocoded coords available OR no coords (relax check)
+                                        (_geocodedClientLatLng == null ||
+                                            _calculateDistance(
+                                                    _currentPosition!.latitude,
+                                                    _currentPosition!.longitude,
+                                                    _geocodedClientLatLng![0],
+                                                    _geocodedClientLatLng![1]) <
+                                                (_geofenceRadius + 200)) &&
                                         !_updatingTasks)
                                     ? _handleClockOut
                                     : null,

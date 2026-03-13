@@ -83,7 +83,9 @@ class ShiftOfferManager {
   /// Handle incoming new offer (from Realtime)
   Future<void> _handleNewOffer(Map<String, dynamic> record) async {
     try {
-      final offersId = record['offers_id'] as int;
+      final offersId = (record['offer_id'] as num?)?.toInt() ??
+          (record['offers_id'] as num?)?.toInt() ??
+          0;
       debugPrint('📨 Processing new offer ID: $offersId');
 
       // Fetch full details

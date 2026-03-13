@@ -728,6 +728,7 @@ class EmailService {
   }
 
   /// Sends a shift change request email
+  /// [toEmail] — supervisor's email from DB; falls back to _managerEmail if null
   static Future<bool> sendShiftChangeRequestEmail({
     required String requestType,
     required String clientName,
@@ -735,6 +736,7 @@ class EmailService {
     required String shiftTime,
     required String reason,
     required String employeeName,
+    String? toEmail,
     String? signatureUrl,
     Uint8List? signatureImage,
   }) async {
@@ -748,9 +750,15 @@ class EmailService {
         ignoreBadCertificate: false,
       );
 
+      if (toEmail == null || toEmail.isEmpty) {
+        // We only want to send to the assigned supervisor, never a hardcoded email
+        // print('❌ Error: No supervisor email provided. Aborting email send.');
+        return false;
+      }
+
       final message = Message()
-        ..from = const Address(_senderEmail, 'Nurse Tracking App')
-        ..recipients.add(_managerEmail)
+        ..from = const Address(_senderEmail, 'ZaqenCare App')
+        ..recipients.add(toEmail)
         ..subject = 'Shift Change Request: $requestType'
         ..html = _buildShiftChangeRequestHtml(
           requestType: requestType,

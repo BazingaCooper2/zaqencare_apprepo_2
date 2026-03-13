@@ -43,38 +43,46 @@ class ShiftOfferRecord {
     final clientData = shiftData?['client'] as Map<String, dynamic>?;
 
     return ShiftOfferRecord(
-      offersId: (json['offers_id'] as num).toInt(),
+      offersId: (json['offer_id'] as num?)?.toInt() ??
+          (json['offers_id'] as num?)?.toInt() ??
+          0,
       empId: (json['emp_id'] as num?)?.toInt(),
       clientId: (json['client_id'] as num?)?.toInt(),
       shiftId: (json['shift_id'] as num?)?.toInt(),
-      status: json['status'] as String?,
-      sentAt: json['sent_at'] != null
-          ? DateTime.parse(json['sent_at'] as String)
-          : null,
-      responseTime: json['response_time'] != null
-          ? DateTime.parse(json['response_time'] as String)
-          : null,
+      status: json['status']?.toString(),
+      sentAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'].toString())
+          : (json['sent_at'] != null
+              ? DateTime.parse(json['sent_at'].toString())
+              : null),
+      responseTime: json['accepted_at'] != null
+          ? DateTime.parse(json['accepted_at'].toString())
+          : (json['updated_at'] != null
+              ? DateTime.parse(json['updated_at'].toString())
+              : (json['response_time'] != null
+                  ? DateTime.parse(json['response_time'].toString())
+                  : null)),
       offerOrder: (json['offer_order'] as num?)?.toInt(),
 
       // Map joined fields
-      shiftDate: shiftData?['date'] as String?,
-      shiftStart: shiftData?['shift_start_time'] as String?,
-      shiftEnd: shiftData?['shift_end_time'] as String?,
-      clientFirstName: clientData?['first_name'] as String?,
-      clientLastName: clientData?['last_name'] as String?,
-      clientAddress: clientData?['address'] as String?,
+      shiftDate: shiftData?['date']?.toString(),
+      shiftStart: shiftData?['shift_start_time']?.toString(),
+      shiftEnd: shiftData?['shift_end_time']?.toString(),
+      clientFirstName: clientData?['first_name']?.toString(),
+      clientLastName: clientData?['last_name']?.toString(),
+      clientAddress: clientData?['address']?.toString(),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'offers_id': offersId,
+      'offer_id': offersId,
       'emp_id': empId,
       'client_id': clientId,
       'shift_id': shiftId,
       'status': status,
-      'sent_at': sentAt?.toIso8601String(),
-      'response_time': responseTime?.toIso8601String(),
+      'created_at': sentAt?.toIso8601String(),
+      'updated_at': responseTime?.toIso8601String(),
       'offer_order': offerOrder,
       'shift_date': shiftDate,
       'shift_start': shiftStart,

@@ -14,7 +14,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 export async function getEmployeeDetails(emp_id: number) {
   // 1. Fetch employee
   const { data: emp, error: empErr } = await supabase
-    .from("employee")
+    .from("employee_final")
     .select("emp_id, first_name, last_name, email, supervisor_id")
     .eq("emp_id", emp_id)
     .single();
@@ -25,8 +25,8 @@ export async function getEmployeeDetails(emp_id: number) {
   }
 
   // 2. Fetch supervisor using supervisor_id
-  let supervisor_name = "Supervisor";
-  let supervisor_email = "supervisor@nursetracker.app";
+  let supervisor_name = null;
+  let supervisor_email = null;
 
   if (emp.supervisor_id) {
     const { data: sup, error: supErr } = await supabase

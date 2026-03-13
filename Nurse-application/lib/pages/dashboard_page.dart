@@ -16,6 +16,7 @@ import '../widgets/chatbot_button.dart';
 import '../services/shift_offer_helper.dart';
 import 'shift_offers_page.dart';
 import '../widgets/custom_loading_screen.dart';
+import '../constants/tables.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -45,7 +46,7 @@ class _DashboardPageState extends State<DashboardPage> {
       }
 
       final response = await supabase
-          .from('employee')
+          .from(Tables.employee)
           .select()
           .eq('emp_id', empId)
           .maybeSingle();

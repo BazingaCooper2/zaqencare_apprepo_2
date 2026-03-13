@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../main.dart';
 import '../models/task_model.dart';
 import '../models/shift.dart';
+import '../constants/tables.dart';
 
 class TasksDialog extends StatefulWidget {
   final Shift shift;
@@ -23,14 +24,92 @@ class _TasksDialogState extends State<TasksDialog> {
 
   Future<void> _loadTasks() async {
     try {
-      // 1. Try fetching by shift_id
+      // ──────────────────────────────────────────────────────
+      // 1. PRIMARY: Parse shift.task_id comma-separated string
+      //    e.g. "task1,task2,task3,task4,task5"
+      // ──────────────────────────────────────────────────────
+      if (widget.shift.taskId != null && widget.shift.taskId!.contains(',')) {
+        final parsed = Task.fromCommaSeparated(
+          widget.shift.taskId,
+          shiftId: widget.shift.shiftId,
+        );
+        if (parsed.isNotEmpty) {
+          debugPrint(
+              '✅ TasksDialog: Loaded ${parsed.length} tasks from shift.task_id (comma-separated)');
+          if (mounted) {
+            setState(() {
+              _tasks = parsed;
+              _isLoading = false;
+            });
+          }
+          return;
+        }
+      }
+
+      // ──────────────────────────────────────────────────────
+      // 2. Fetch tasks from client_final.tasks JSONB via client_id
+      // ──────────────────────────────────────────────────────
+      if (widget.shift.clientId != null) {
+        try {
+          final clientResponse = await supabase
+              .from(Tables.client)
+              .select('tasks')
+              .eq('id', widget.shift.clientId!)
+              .maybeSingle();
+
+          if (clientResponse != null && clientResponse['tasks'] != null) {
+            final clientTasks = Task.fromClientTasksJson(
+              clientResponse['tasks'],
+              shiftId: widget.shift.shiftId,
+            );
+
+            if (clientTasks.isNotEmpty) {
+              debugPrint(
+                  '✅ TasksDialog: Loaded ${clientTasks.length} tasks from client_final.tasks');
+              if (mounted) {
+                setState(() {
+                  _tasks = clientTasks;
+                  _isLoading = false;
+                });
+              }
+              return;
+            }
+          }
+        } catch (e) {
+          debugPrint('⚠️ TasksDialog: Error fetching client_final tasks: $e');
+        }
+      }
+
+      // 2b. If client has embedded tasks in the shift's client object
+      if (widget.shift.client?.tasks != null) {
+        final clientTasks = Task.fromClientTasksJson(
+          widget.shift.client!.tasks,
+          shiftId: widget.shift.shiftId,
+        );
+
+        if (clientTasks.isNotEmpty) {
+          debugPrint(
+              '✅ TasksDialog: Loaded ${clientTasks.length} tasks from embedded client.tasks');
+          if (mounted) {
+            setState(() {
+              _tasks = clientTasks;
+              _isLoading = false;
+            });
+          }
+          return;
+        }
+      }
+
+      // ──────────────────────────────────────────────────────
+      // 3. Fallback: Legacy tasks table by shift_id
+      // ──────────────────────────────────────────────────────
       var response = await supabase
           .from('tasks')
           .select('*')
           .eq('shift_id', widget.shift.shiftId)
           .order('task_id');
 
-      // 2. Fallback: Try linking via shift.task_id (Business ID) if present
+      // 4. Fallback: Try linking via shift.task_id as a single task_code
       if (response.isEmpty && widget.shift.taskId != null) {
         final shiftTaskCode = widget.shift.taskId!;
         final fallbackResponse = await supabase
@@ -72,28 +151,33 @@ class _TasksDialogState extends State<TasksDialog> {
       status: value,
       comment: task.comment,
       taskCode: task.taskCode,
+      isFromClient: task.isFromClient,
+      isFromShiftTaskId: task.isFromShiftTaskId,
     );
 
     setState(() {
       _tasks[index] = updatedTask;
     });
 
-    try {
-      await supabase
-          .from('tasks')
-          .update({'status': value}).eq('task_id', task.taskId);
-    } catch (e) {
-      debugPrint('Error updating task: $e');
-      // Revert on error
-      if (mounted) {
-        setState(() {
-          _tasks[index] = task;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update task: $e')),
-        );
+    // Only persist to tasks table if it's from the legacy tasks table
+    if (!task.isLocal) {
+      try {
+        await supabase
+            .from('tasks')
+            .update({'status': value}).eq('task_id', task.taskId);
+      } catch (e) {
+        debugPrint('Error updating task: $e');
+        if (mounted) {
+          setState(() {
+            _tasks[index] = task;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to update task: $e')),
+          );
+        }
       }
     }
+    // Local tasks (from shift.task_id or client.tasks) toggle in-memory only
   }
 
   Future<void> _completeShift() async {

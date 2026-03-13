@@ -10,6 +10,7 @@ import 'package:nurse_tracking_app/models/shift.dart';
 import 'package:signature/signature.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data/faq_data.dart';
+import '../constants/tables.dart';
 
 class ChatbotModal extends StatefulWidget {
   const ChatbotModal({super.key});
@@ -32,7 +33,7 @@ class _ChatbotModalState extends State<ChatbotModal> {
 
   void _addWelcomeMessage() {
     _messages.add(ChatMessage(
-      text: 'Hello! I\'m your Nurse Assistant. How can I help you today?',
+      text: 'Hello! I\'m Zaq. How can I help you today?',
       isBot: true,
       timestamp: DateTime.now(),
     ));
@@ -666,7 +667,7 @@ class _ChatbotModalState extends State<ChatbotModal> {
               shiftData = Map<String, dynamic>.from(response.first as Map);
             }
           } else if (response is Map) {
-            shiftData = Map<String, dynamic>.from(response as Map);
+            shiftData = Map<String, dynamic>.from(response);
           }
 
           if (shiftData != null) {
@@ -678,34 +679,68 @@ class _ChatbotModalState extends State<ChatbotModal> {
       }
 
       // 2. Fallback: Manual Date/Time check for "Scheduled" shifts that might be blocked by strict RPC logic
-      debugPrint('Fallback: Checking scheduled shifts for today...');
       final now = DateTime.now();
       final todayStr =
           "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+      debugPrint(
+          'Fallback: Checking scheduled shifts for today (EmpID: $empId, Date: $todayStr)...');
 
       try {
         final fallbackResponse = await supabase
             .from('shift')
-            .select('*, client:client_id(*)')
+            .select('''
+            shift_id,
+            emp_id,
+            client_id,
+            shift_status,
+            shift_start_time,
+            shift_end_time,
+            start_ts,
+            clock_in,
+            clock_out,
+            date,
+            shift_type,
+            task_id
+          ''')
             .eq('emp_id', empId)
             .eq('date', todayStr)
-            .eq('shift_status', 'scheduled');
+            .inFilter('shift_status',
+                ['scheduled', 'Scheduled', 'in_progress', 'In Progress']);
 
         debugPrint('Fallback response: $fallbackResponse');
 
-        if (fallbackResponse != null &&
-            fallbackResponse is List &&
-            fallbackResponse.isNotEmpty) {
-          // Find the "best" match (closest start time that hasn't ended)
+        if ((fallbackResponse as List).isNotEmpty) {
+          debugPrint(
+              'Fallback found ${fallbackResponse.length} possible shifts today');
+
+          dynamic bestMatchMap;
+          int maxScore = 0;
+
+          // Find the most relevant shift (Currently active > Starting soon > Just ended)
           for (var s in fallbackResponse) {
-            final shift = s as Map<String, dynamic>;
-            if (_isShiftActiveOrUpcoming(
-                shift['shift_start_time'], shift['shift_end_time'])) {
-              debugPrint(
-                  'Found active/upcoming fallback shift: ${shift['shift_id']}');
-              return await _ensureClientDetails(shift);
+            final shiftMap = s;
+            final shiftObj = Shift.fromJson(shiftMap);
+            final score = shiftObj.shiftTimeScore;
+
+            if (score > maxScore) {
+              maxScore = score;
+              bestMatchMap = shiftMap;
+              if (maxScore == 3) break; // Found an active one, can't get better
             }
           }
+
+          if (bestMatchMap != null) {
+            debugPrint(
+                'Found best matching shift in fallback: ${bestMatchMap['shift_id']} (Score: $maxScore)');
+            return await _ensureClientDetails(bestMatchMap);
+          }
+
+          // 2. If no shift is strictly active, but we have shifts for today,
+          // pick the first shift from today.
+          debugPrint(
+              'No strictly active shift found. Picking the first shift from today.');
+          final shift = fallbackResponse.first;
+          return await _ensureClientDetails(shift);
         }
       } catch (e) {
         debugPrint('Fallback query failed: $e');
@@ -720,45 +755,65 @@ class _ChatbotModalState extends State<ChatbotModal> {
 
   Future<Map<String, dynamic>> _ensureClientDetails(
       Map<String, dynamic> shiftData) async {
-    if (shiftData['client_id'] != null &&
-        (shiftData['client_name'] == null || shiftData['client'] == null)) {
+    // If client data already embedded from the join, remap fields
+    if (shiftData['client'] != null && shiftData['client'] is Map) {
+      final c = shiftData['client'] as Map<String, dynamic>;
+      // Remap to the keys Shift.fromJson expects
+      final rawName = c['name'] as String?;
+      final first = c['first_name'] as String? ?? '';
+      final last = c['last_name'] as String? ?? '';
+      shiftData['client_name'] =
+          rawName?.isNotEmpty == true ? rawName : '$first $last'.trim();
+      shiftData['client_service_type'] =
+          c['service_type'] ?? c['individual_service'] ?? c['groups'];
+      // Build address from client_final fields
+      final parts = <String>[
+        if ((c['address'] as String?)?.isNotEmpty == true)
+          c['address'] as String,
+        if ((c['city'] as String?)?.isNotEmpty == true) c['city'] as String,
+        if ((c['province'] as String?)?.isNotEmpty == true)
+          c['province'] as String,
+      ];
+      shiftData['client_location'] = parts.isNotEmpty ? parts.join(', ') : null;
+      return shiftData;
+    }
+
+    // No embedded client — fetch manually
+    if (shiftData['client_id'] != null && shiftData['client_name'] == null) {
       try {
         final supabase = Supabase.instance.client;
         final clientRes = await supabase
-            .from('client')
-            .select('name, service_type')
-            .eq('client_id', shiftData['client_id'])
+            .from(Tables.client)
+            .select(
+                'id, name, first_name, last_name, address, city, province, service_type, individual_service')
+            .eq('id', shiftData['client_id'])
             .single();
 
+        final rawName = clientRes['name'] as String?;
+        final first = clientRes['first_name'] as String? ?? '';
+        final last = clientRes['last_name'] as String? ?? '';
+        shiftData['client_name'] =
+            rawName?.isNotEmpty == true ? rawName : '$first $last'.trim();
+        shiftData['client_service_type'] = clientRes['service_type'] ??
+            clientRes['individual_service'] ??
+            clientRes['groups'];
         shiftData['client'] = clientRes;
-        shiftData['client_name'] = clientRes['name'];
-        shiftData['client_service_type'] = clientRes['service_type'];
+
+        final parts = <String>[
+          if ((clientRes['address'] as String?)?.isNotEmpty == true)
+            clientRes['address'] as String,
+          if ((clientRes['city'] as String?)?.isNotEmpty == true)
+            clientRes['city'] as String,
+          if ((clientRes['province'] as String?)?.isNotEmpty == true)
+            clientRes['province'] as String,
+        ];
+        shiftData['client_location'] =
+            parts.isNotEmpty ? parts.join(', ') : null;
       } catch (e) {
         debugPrint('Error fetching client details: $e');
       }
     }
     return shiftData;
-  }
-
-  bool _isShiftActiveOrUpcoming(String? startStr, String? endStr) {
-    if (startStr == null || endStr == null) return false;
-    try {
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
-
-      final startParts = startStr.split(':');
-      final endParts = endStr.split(':');
-
-      final start = today.add(Duration(
-          hours: int.parse(startParts[0]), minutes: int.parse(startParts[1])));
-      final end = today.add(Duration(
-          hours: int.parse(endParts[0]), minutes: int.parse(endParts[1])));
-
-      // Allow if end time is in the future
-      return end.isAfter(now);
-    } catch (e) {
-      return false;
-    }
   }
 
   Future<void> _submitShiftChangeRequest({
@@ -847,16 +902,33 @@ class _ChatbotModalState extends State<ChatbotModal> {
         }).eq('id', activeLog['id']);
       }
 
-      // 5. Send Email
-      // Fetch employee details for email
+      // 5. Send Email to the correct supervisor
+      // Fetch employee details + supervisor
       final employeeRes = await supabase
-          .from('employee')
-          .select('first_name, last_name')
+          .from(Tables.employee)
+          .select('first_name, last_name, supervisor_id')
           .eq('emp_id', empId)
           .single();
       final employeeName =
           '${employeeRes['first_name']} ${employeeRes['last_name'] ?? ''}'
               .trim();
+
+      // Look up supervisor email
+      String? supervisorEmail;
+      final supervisorId = employeeRes['supervisor_id'];
+      if (supervisorId != null) {
+        try {
+          final supRes = await supabase
+              .from('supervisors')
+              .select('email')
+              .eq('id', supervisorId)
+              .single();
+          supervisorEmail = supRes['email'] as String?;
+          debugPrint('📧 Supervisor email: $supervisorEmail');
+        } catch (e) {
+          debugPrint('⚠️ Could not fetch supervisor email: $e');
+        }
+      }
 
       await EmailService.sendShiftChangeRequestEmail(
         requestType: requestType.replaceAll('_', ' '),
@@ -865,6 +937,7 @@ class _ChatbotModalState extends State<ChatbotModal> {
         shiftTime: shift.formattedTimeRange,
         reason: reason,
         employeeName: employeeName,
+        toEmail: supervisorEmail,
         signatureUrl: signatureUrl,
         signatureImage: signatureImage,
       );
@@ -914,9 +987,15 @@ class _ChatbotModalState extends State<ChatbotModal> {
 
     if (shiftData == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No active shift found to end early.')),
-        );
+        setState(() {
+          _messages.add(ChatMessage(
+            text: 'No shift is live/assigned',
+            isBot: true,
+            timestamp: DateTime.now(),
+          ));
+        });
+        _scrollToBottom();
+        _saveChatHistory();
       }
       return;
     }
@@ -1192,9 +1271,15 @@ class _ChatbotModalState extends State<ChatbotModal> {
 
     if (shiftMap == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No active shift found for $issueType.')),
-        );
+        setState(() {
+          _messages.add(ChatMessage(
+            text: 'No shift is live/assigned',
+            isBot: true,
+            timestamp: DateTime.now(),
+          ));
+        });
+        _scrollToBottom();
+        _saveChatHistory();
       }
       return;
     }
@@ -1211,8 +1296,9 @@ class _ChatbotModalState extends State<ChatbotModal> {
 
     // Determine dialog title and message based on issue type
     String dialogTitle = issueType;
-    String dialogMessage =
-        '$issueType. Please sign below to confirm ending your shift now.';
+    String dialogMessage = issueType == 'Client cancelled'
+        ? 'Client cancelled at the door. Please sign then continue.'
+        : '$issueType. Please sign below to confirm ending your shift now.';
 
     await showDialog(
       context: context,
@@ -1425,7 +1511,7 @@ class _ChatbotModalState extends State<ChatbotModal> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Nurse Assistant',
+                            'Zaq',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 18,

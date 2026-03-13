@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/employee.dart';
 import '../main.dart';
 import 'package:nurse_tracking_app/services/session.dart';
+import '../constants/tables.dart';
 
 class EmployeeInfoPage extends StatefulWidget {
   final Employee employee;
@@ -59,7 +60,7 @@ class _EmployeeInfoPageState extends State<EmployeeInfoPage> {
         return;
       }
 
-      await supabase.from('employee').update({
+      await supabase.from(Tables.employee).update({
         'first_name': _firstNameController.text.trim(),
         'last_name': _lastNameController.text.trim(),
         'phone': _phoneController.text.trim(),
@@ -68,9 +69,9 @@ class _EmployeeInfoPageState extends State<EmployeeInfoPage> {
 
       // Reload employee data
       final response = await supabase
-          .from('employee')
+          .from(Tables.employee)
           .select(
-              'emp_id, first_name, last_name, designation, phone, email, address, status, skills, qualifications, image_url')
+              'emp_id, first_name, last_name, designation, phone, email, address, Employee_status, skills, qualifications, image_url')
           .eq('emp_id', empId)
           .single();
 

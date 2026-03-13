@@ -9,6 +9,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'providers/theme_provider.dart';
 import 'pages/splash_page.dart';
 import 'widgets/custom_loading_screen.dart';
+import 'constants/tables.dart';
 
 /// ✅ Global Supabase client
 late final SupabaseClient supabase;
@@ -80,7 +81,7 @@ class _AppRootState extends State<AppRoot> {
 
       // ✅ Health check (optional)
       try {
-        await supabase.from('employee').select('email').limit(1);
+        await supabase.from(Tables.employee).select('email').limit(1);
         debugPrint('🩺 Supabase OK');
       } catch (e) {
         debugPrint('⚠️ Supabase health check failed (non-critical): $e');

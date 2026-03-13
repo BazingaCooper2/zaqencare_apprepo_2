@@ -1,146 +1,323 @@
-import 'package:flutter/foundation.dart';
-
+/// Model for client_final table.
+/// Full schema including all columns from the client_final table.
 class Client {
-  final int clientId;
-  final String firstName;
+  final int id;
+  final String? firstName;
   final String? lastName;
-  final String? phone;
+  final String? name;
   final String? email;
-  final String? serviceType;
-  final DateTime? dateOfBirth;
   final String? gender;
-  final String? preferredLanguage;
-  final String? notes;
-  final String? risks;
-  final String? clientCoordinatorName;
-  final String? imageUrl;
-  final String? accountingDetails;
-  final String? shiftStartTime;
-  final String? shiftEndTime;
-  final String name;
-  final String? addressLine1;
+  final String? status;
+  final String? phoneMain;
+  final String? phoneOther;
+  final String? phonePersonal;
+  final String? emailPreferred;
+  final String? address;
   final String? addressLine2;
   final String? city;
   final String? province;
-  final String? zipCode;
-  final String password;
+  final String? zip;
+  final String? country;
+  final String? county;
+  final String? dateOfBirth;
+  final String? preferredName;
+  final String? ethnicity;
+  final String? preferredLanguage;
+  final String? externalId;
+  final String? guid;
+  final String? branchId;
+  final String? brn;
+  final String? healthCard;
+  final String? healthCardVersion;
+  final String? risks;
+  final String? primaryDiagnosis;
+  final String? clientAilmentType;
+  final Map<String, dynamic>? medicalNotes;
+  final bool? wheelchairUser;
+  final bool? hasCatheter;
+  final bool? requiresOxygen;
+  final String? covidVaccinationStatus;
+  final String? serviceType;
+  final String? careMgmt;
+  final String? individualService;
+  final dynamic tasks;
+  final String? instructions;
+  final String? schedulingPreferences;
+  final String? shiftStartTime;
+  final String? shiftEndTime;
+  final String? startOn;
+  final String? terminationDate;
+  final String? communicationMethod;
+  final String? communicationMethod2;
+  final String? emergencyResponseLevel;
+  final String? doctor;
+  final String? nurse;
+  final String? clientCoordinatorName;
+  final String? coordinatorNotes;
   final String? patientLocation;
+  final String? referral;
+  final String? priorityRiskRating;
+  final String? signedMedicationAuthorization;
+  final String? livingArrangementsOtherOccupants;
+  final String? accountingDetails;
+  final Map<String, dynamic>? payrollData;
+  final String? password;
+  final String? imageUrl;
+  final List<String>? groups;
+  final String? tagsV2;
+  final dynamic notes;
+  final dynamic emergencyContacts;
+  final dynamic progressNotes;
+  final dynamic administrativeNotes;
 
   Client({
-    required this.clientId,
-    required this.firstName,
+    required this.id,
+    this.firstName,
     this.lastName,
-    this.phone,
+    this.name,
     this.email,
-    this.serviceType,
-    this.dateOfBirth,
     this.gender,
-    this.preferredLanguage,
-    this.notes,
-    this.risks,
-    this.clientCoordinatorName,
-    this.imageUrl,
-    this.accountingDetails,
-    this.shiftStartTime,
-    this.shiftEndTime,
-    required this.name,
-    this.addressLine1,
+    this.status,
+    this.phoneMain,
+    this.phoneOther,
+    this.phonePersonal,
+    this.emailPreferred,
+    this.address,
     this.addressLine2,
     this.city,
     this.province,
-    this.zipCode,
-    required this.password,
+    this.zip,
+    this.country,
+    this.county,
+    this.dateOfBirth,
+    this.preferredName,
+    this.ethnicity,
+    this.preferredLanguage,
+    this.externalId,
+    this.guid,
+    this.branchId,
+    this.brn,
+    this.healthCard,
+    this.healthCardVersion,
+    this.risks,
+    this.primaryDiagnosis,
+    this.clientAilmentType,
+    this.medicalNotes,
+    this.wheelchairUser,
+    this.hasCatheter,
+    this.requiresOxygen,
+    this.covidVaccinationStatus,
+    this.serviceType,
+    this.careMgmt,
+    this.individualService,
+    this.tasks,
+    this.instructions,
+    this.schedulingPreferences,
+    this.shiftStartTime,
+    this.shiftEndTime,
+    this.startOn,
+    this.terminationDate,
+    this.communicationMethod,
+    this.communicationMethod2,
+    this.emergencyResponseLevel,
+    this.doctor,
+    this.nurse,
+    this.clientCoordinatorName,
+    this.coordinatorNotes,
     this.patientLocation,
+    this.referral,
+    this.priorityRiskRating,
+    this.signedMedicationAuthorization,
+    this.livingArrangementsOtherOccupants,
+    this.accountingDetails,
+    this.payrollData,
+    this.password,
+    this.imageUrl,
+    this.groups,
+    this.tagsV2,
+    this.notes,
+    this.emergencyContacts,
+    this.progressNotes,
+    this.administrativeNotes,
   });
 
   factory Client.fromJson(Map<String, dynamic> json) {
     return Client(
-      clientId: json['client_id'],
-      firstName: json['first_name'],
-      lastName: json['last_name'],
-      phone: json['phone'],
-      email: json['email'],
-      serviceType: json['service_type'],
-      dateOfBirth: json['date_of_birth'] != null
-          ? DateTime.parse(json['date_of_birth'])
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      firstName: (json['first_name'] ?? json['firstName'])?.toString(),
+      lastName: (json['last_name'] ?? json['lastName'])?.toString(),
+      name: json['name']?.toString(),
+      email: json['email']?.toString(),
+      gender: json['gender']?.toString(),
+      status: json['status']?.toString(),
+      phoneMain: (json['phone_main'] ?? json['phone'] ?? json['primary_phone'])
+          ?.toString(),
+      phoneOther: json['phone_other']?.toString(),
+      phonePersonal: json['phone_personal']?.toString(),
+      emailPreferred: json['email_preferred']?.toString(),
+      address: (json['address'] ??
+              json['addressLine1'] ??
+              json['address_line_1'] ??
+              json['full_address'])
+          ?.toString(),
+      addressLine2: json['address_line2']?.toString(),
+      city: json['city']?.toString(),
+      province: (json['province'] ?? json['state'])?.toString(),
+      zip: (json['zip'] ?? json['zipCode'] ?? json['zip_code'])?.toString(),
+      country: json['country']?.toString(),
+      county: json['county']?.toString(),
+      dateOfBirth: json['date_of_birth']?.toString(),
+      preferredName: json['preferred_name']?.toString(),
+      ethnicity: json['ethnicity']?.toString(),
+      preferredLanguage: json['preferred_language']?.toString(),
+      externalId: json['external_id']?.toString(),
+      guid: json['guid']?.toString(),
+      branchId: json['branch_id']?.toString(),
+      brn: json['brn']?.toString(),
+      healthCard: json['health_card']?.toString(),
+      healthCardVersion: json['health_card_version']?.toString(),
+      risks: json['risks']?.toString(),
+      primaryDiagnosis: json['primary_diagnosis']?.toString(),
+      clientAilmentType: json['client_ailment_type']?.toString(),
+      medicalNotes: json['medical_notes'] is Map
+          ? Map<String, dynamic>.from(json['medical_notes'])
           : null,
-      gender: json['gender'],
-      preferredLanguage: json['preferred_language'],
+      wheelchairUser: json['wheelchair_user'] as bool?,
+      hasCatheter: json['has_catheter'] as bool?,
+      requiresOxygen: json['requires_oxygen'] as bool?,
+      covidVaccinationStatus: json['covid_vaccination_status']?.toString(),
+      serviceType: () {
+        // service_type from the DB, or fallback to individual_service / groups
+        final st = json['service_type'] ??
+            json['individual_service'] ??
+            json['groups'] ??
+            json['serviceType'];
+        if (st == null) return null;
+        if (st is List) return st.join(', ');
+        return st.toString();
+      }(),
+      careMgmt: json['care_mgmt']?.toString(),
+      individualService: json['individual_service']?.toString(),
+      tasks: json['tasks'],
+      instructions: json['instructions']?.toString(),
+      schedulingPreferences: json['scheduling_preferences']?.toString(),
+      shiftStartTime: json['shift_start_time']?.toString(),
+      shiftEndTime: json['shift_end_time']?.toString(),
+      startOn: json['start_on']?.toString(),
+      terminationDate: json['termination_date']?.toString(),
+      communicationMethod: json['communication_method']?.toString(),
+      communicationMethod2: json['communication_method_2']?.toString(),
+      emergencyResponseLevel: json['emergency_response_level']?.toString(),
+      doctor: json['doctor']?.toString(),
+      nurse: json['nurse']?.toString(),
+      clientCoordinatorName: json['client_coordinator_name']?.toString(),
+      coordinatorNotes: json['coordinator_notes']?.toString(),
+      patientLocation: json['patient_location']?.toString(),
+      referral: json['referral']?.toString(),
+      priorityRiskRating: json['priority_risk_rating']?.toString(),
+      signedMedicationAuthorization:
+          json['signed_medication_authorization']?.toString(),
+      livingArrangementsOtherOccupants:
+          json['living_arrangements_other_occupants']?.toString(),
+      accountingDetails: json['accounting_details']?.toString(),
+      payrollData: json['payroll_data'] is Map
+          ? Map<String, dynamic>.from(json['payroll_data'])
+          : null,
+      password: json['password']?.toString(),
+      imageUrl: (json['image_url'] ?? json['imageUrl'] ?? json['photo_url'])
+          ?.toString(),
+      groups: json['groups'] is List
+          ? List<String>.from((json['groups'] as List).map((e) => e.toString()))
+          : null,
+      tagsV2: json['tags_v2']?.toString(),
       notes: json['notes'],
-      risks: json['risks'],
-      clientCoordinatorName: json['client_coordinator_name'],
-      imageUrl: json['image_url'],
-      accountingDetails: json['accounting_details'],
-      shiftStartTime: json['shift_start_time'],
-      shiftEndTime: json['shift_end_time'],
-      name: json['name'],
-      addressLine1: json['address_line1'],
-      addressLine2: json['address_line2'],
-      city: json['city'],
-      province: json['province'],
-      zipCode: json['zip_code'],
-      password: json['password'],
-      patientLocation: json['patient_location'],
+      emergencyContacts: json['emergency_contacts'],
+      progressNotes: json['progress_notes'],
+      administrativeNotes: json['administrative_notes'],
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'client_id': clientId,
+      'id': id,
       'first_name': firstName,
       'last_name': lastName,
-      'phone': phone,
-      'email': email,
-      'service_type': serviceType,
-      'date_of_birth': dateOfBirth?.toIso8601String(),
-      'gender': gender,
-      'preferred_language': preferredLanguage,
-      'notes': notes,
-      'risks': risks,
-      'client_coordinator_name': clientCoordinatorName,
-      'image_url': imageUrl,
-      'accounting_details': accountingDetails,
-      'shift_start_time': shiftStartTime,
-      'shift_end_time': shiftEndTime,
       'name': name,
-      'address_line1': addressLine1,
+      'email': email,
+      'gender': gender,
+      'status': status,
+      'phone_main': phoneMain,
+      'phone_other': phoneOther,
+      'phone_personal': phonePersonal,
+      'email_preferred': emailPreferred,
+      'address': address,
       'address_line2': addressLine2,
       'city': city,
       'province': province,
-      'zip_code': zipCode,
-      'password': password,
+      'zip': zip,
+      'country': country,
+      'county': county,
+      'date_of_birth': dateOfBirth,
+      'preferred_name': preferredName,
+      'ethnicity': ethnicity,
+      'preferred_language': preferredLanguage,
+      'external_id': externalId,
+      'guid': guid,
+      'branch_id': branchId,
+      'brn': brn,
+      'health_card': healthCard,
+      'health_card_version': healthCardVersion,
+      'risks': risks,
+      'primary_diagnosis': primaryDiagnosis,
+      'client_ailment_type': clientAilmentType,
+      'medical_notes': medicalNotes,
+      'wheelchair_user': wheelchairUser,
+      'has_catheter': hasCatheter,
+      'requires_oxygen': requiresOxygen,
+      'covid_vaccination_status': covidVaccinationStatus,
+      'service_type': serviceType,
+      'care_mgmt': careMgmt,
+      'individual_service': individualService,
+      'tasks': tasks,
+      'instructions': instructions,
+      'scheduling_preferences': schedulingPreferences,
+      'shift_start_time': shiftStartTime,
+      'shift_end_time': shiftEndTime,
+      'start_on': startOn,
+      'termination_date': terminationDate,
+      'communication_method': communicationMethod,
+      'communication_method_2': communicationMethod2,
+      'emergency_response_level': emergencyResponseLevel,
+      'doctor': doctor,
+      'nurse': nurse,
+      'client_coordinator_name': clientCoordinatorName,
+      'coordinator_notes': coordinatorNotes,
       'patient_location': patientLocation,
+      'referral': referral,
+      'priority_risk_rating': priorityRiskRating,
+      'signed_medication_authorization': signedMedicationAuthorization,
+      'living_arrangements_other_occupants': livingArrangementsOtherOccupants,
+      'accounting_details': accountingDetails,
+      'payroll_data': payrollData,
+      'image_url': imageUrl,
+      'groups': groups,
+      'tags_v2': tagsV2,
+      'notes': notes,
+      'emergency_contacts': emergencyContacts,
+      'progress_notes': progressNotes,
+      'administrative_notes': administrativeNotes,
     };
   }
 
-  String get fullName => '$firstName ${lastName ?? ''}'.trim();
-
-  // Helper method to parse patient location to LatLng coordinates
-  // Format: "latitude,longitude" (e.g., "43.538165,-80.311467")
-  List<double>? get locationCoordinates {
-    if (patientLocation == null || patientLocation!.isEmpty) return null;
-
-    try {
-      final parts = patientLocation!.split(',');
-      if (parts.length == 2) {
-        return [
-          double.parse(parts[0].trim()),
-          double.parse(parts[1].trim()),
-        ];
-      }
-    } catch (e) {
-      debugPrint('Error parsing patient_location: $e');
-    }
-    return null;
-  }
-
+  // Backward compatibility getters
+  int get clientId => id;
+  String get fullName => name ?? '${firstName ?? ''} ${lastName ?? ''}'.trim();
   String get fullAddress {
-    final parts = <String>[];
-    if (addressLine1?.isNotEmpty == true) parts.add(addressLine1!);
-    if (addressLine2?.isNotEmpty == true) parts.add(addressLine2!);
-    if (city?.isNotEmpty == true) parts.add(city!);
-    if (province?.isNotEmpty == true) parts.add(province!);
-    if (zipCode?.isNotEmpty == true) parts.add(zipCode!);
-    return parts.isNotEmpty ? parts.join(', ') : name;
+    final parts = [address, addressLine2, city, province, zip, country]
+        .where((s) => s != null && s.isNotEmpty);
+    return parts.isNotEmpty ? parts.join(', ') : (name ?? '');
   }
+
+  // Alias for backward compat (old code used `state`)
+  String? get state => province;
 }

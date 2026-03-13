@@ -5,6 +5,7 @@ import 'package:nurse_tracking_app/main.dart'; // For Global keys/Supabase if ne
 import 'package:nurse_tracking_app/pages/dashboard_page.dart';
 import 'package:nurse_tracking_app/services/session.dart';
 import 'package:nurse_tracking_app/services/shift_offer_helper.dart';
+import 'package:nurse_tracking_app/constants/tables.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -33,40 +34,80 @@ class _LoginPageState extends State<LoginPage> {
         return;
       }
 
-      debugPrint('🔍 Attempting Supabase login for: $email');
+      debugPrint('🔍 Attempting login for: $email');
 
-      // ✅ Step 1: Authenticate user using Supabase Auth
-      final response = await supabase.auth.signInWithPassword(
-        email: email,
-        password: password,
-      );
+      Map<String, dynamic>? employee;
+      bool isSupabaseAuth = false;
 
-      final user = response.user;
-      if (user == null) {
-        if (mounted) {
-          context.showSnackBar('Invalid credentials', isError: true);
+      // ✅ Step 1: Check Database directly for matching email and password
+      try {
+        final List<dynamic> dbResponse = await supabase
+            .from(Tables.employee)
+            .select(
+                'emp_id, first_name, last_name, email, designation, image_url, Employee_status')
+            .eq('email', email)
+            .eq('password', password)
+            .limit(1);
+
+        if (dbResponse.isNotEmpty) {
+          employee = dbResponse.first as Map<String, dynamic>;
+          debugPrint('✅ Logged in via Database match as ${employee['email']}');
+
+          // Try to sign in with Supabase Auth silently (don't block if it fails)
+          try {
+            await supabase.auth.signInWithPassword(
+              email: email,
+              password: password,
+            );
+            isSupabaseAuth = true;
+          } catch (_) {
+            debugPrint('⚠️ Supabase Auth failed, but DB credentials matched.');
+          }
         }
-        setState(() => _isLoading = false);
-        return;
+      } catch (e) {
+        debugPrint('⚠️ Database direct auth login attempt issue: $e');
       }
 
-      debugPrint('✅ Logged in as ${user.email}, UID: ${user.id}');
+      // ✅ Step 2: Fallback to Supabase Auth if DB match failed
+      if (employee == null) {
+        try {
+          final authResponse = await supabase.auth.signInWithPassword(
+            email: email,
+            password: password,
+          );
 
-      // ✅ Step 2: Fetch corresponding employee record
-      final employee = await supabase
-          .from('employee')
-          .select(
-              'emp_id, first_name, last_name, email, designation, image_url, status')
-          .eq('email', user.email ?? email)
-          .maybeSingle();
+          final user = authResponse.user;
+          if (user != null) {
+            isSupabaseAuth = true;
+            debugPrint(
+                '✅ Logged in via Supabase Auth as ${user.email}, UID: ${user.id}');
+
+            // Fetch corresponding employee record with limit(1) to avoid multiple rows crash
+            final List<dynamic> empResponse = await supabase
+                .from(Tables.employee)
+                .select(
+                    'emp_id, first_name, last_name, email, designation, image_url, Employee_status')
+                .eq('email', user.email ?? email)
+                .limit(1);
+
+            if (empResponse.isNotEmpty) {
+              employee = empResponse.first as Map<String, dynamic>;
+            }
+          }
+        } catch (e) {
+          debugPrint('⚠️ Supabase Auth exception: $e');
+        }
+      }
 
       if (employee == null) {
         if (mounted) {
           context.showSnackBar(
-              'Employee profile not found in database. Contact admin.',
+              'Invalid credentials or employee profile not found.',
               isError: true);
         }
-        await supabase.auth.signOut();
+        if (isSupabaseAuth) {
+          await supabase.auth.signOut();
+        }
         setState(() => _isLoading = false);
         return;
       }
@@ -186,7 +227,7 @@ class _LoginPageState extends State<LoginPage> {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                "Gerri-Assistance Portal",
+                                "ZaqenCare Assistance Portal",
                                 textAlign: TextAlign.center,
                                 style: theme.textTheme.bodyLarge?.copyWith(
                                   color: theme.colorScheme.onSurface
@@ -232,29 +273,35 @@ class _LoginPageState extends State<LoginPage> {
                               const SizedBox(height: 32),
 
                               // Sign In Button
-                              SizedBox(
-                                height: 50,
-                                child: ElevatedButton(
-                                  onPressed: _isLoading ? null : _signIn,
-                                  style: ElevatedButton.styleFrom(
-                                    shadowColor: theme.colorScheme.primary
-                                        .withValues(alpha: 0.4),
-                                    elevation: 6,
-                                  ),
-                                  child: _isLoading
-                                      ? const SizedBox(
-                                          height: 24,
-                                          width: 24,
-                                          child: CircularProgressIndicator(
-                                            color: Colors.white,
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                      : const Text(
-                                          'Sign In',
-                                          style: TextStyle(fontSize: 18),
-                                        ),
+                              ElevatedButton(
+                                onPressed: _isLoading ? null : _signIn,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: theme.colorScheme.primary,
+                                  foregroundColor: Colors.white,
+                                  disabledBackgroundColor: theme
+                                      .colorScheme.primary
+                                      .withValues(alpha: 0.6),
+                                  disabledForegroundColor: Colors.white,
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 16),
+                                  shadowColor: theme.colorScheme.primary
+                                      .withValues(alpha: 0.4),
+                                  elevation: 6,
                                 ),
+                                child: _isLoading
+                                    ? const SizedBox(
+                                        height: 24,
+                                        width: 24,
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Text(
+                                        'Sign In',
+                                        style: TextStyle(
+                                            fontSize: 18, height: 1.0),
+                                      ),
                               ),
                             ],
                           ),
@@ -263,7 +310,7 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     const SizedBox(height: 24),
                     Text(
-                      'Hospital Home Care Management v1.0',
+                      'ZaqenCare Care Management System v1.0',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: isDark ? Colors.white54 : Colors.grey.shade600,
                       ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../main.dart';
 import 'dashboard_page.dart';
+import '../constants/tables.dart';
 
 class EmployeeSetupPage extends StatefulWidget {
   const EmployeeSetupPage({super.key});
@@ -40,7 +41,7 @@ class _EmployeeSetupPageState extends State<EmployeeSetupPage> {
       final user = supabase.auth.currentUser;
       if (user == null) throw Exception('No authenticated user');
 
-      await supabase.from('employee').insert({
+      await supabase.from(Tables.employee).insert({
         'first_name': _firstNameController.text.trim(),
         'last_name': _lastNameController.text.trim(),
         'email': user.email,

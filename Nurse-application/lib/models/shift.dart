@@ -1,81 +1,101 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'client.dart';
 import 'patient.dart';
 
 class Shift {
   final int shiftId;
-  final int? clientId;
   final int? empId;
-  final String? date;
+  final int? clientId;
+  final String? shiftStatus;
   final String? shiftStartTime;
   final String? shiftEndTime;
+  final DateTime? clockIn;
+  final DateTime? clockOut;
+  final String? date;
+  final String? shiftType;
+  final Client? client;
   final String? taskId;
   final String? skills;
   final String? serviceInstructions;
   final String? tags;
   final String? forms;
-  final String? shiftStatus;
   final String? shiftProgressNote;
   final Patient? patient;
   final String? useServiceDuration;
-  final String? clientName;
-  final String? clientLocation;
-  final String? clientServiceType;
 
   Shift({
     required this.shiftId,
-    this.clientId,
     this.empId,
-    this.date,
+    this.clientId,
+    this.shiftStatus,
     this.shiftStartTime,
     this.shiftEndTime,
+    this.clockIn,
+    this.clockOut,
+    this.date,
+    this.shiftType,
+    this.client,
     this.taskId,
     this.skills,
     this.serviceInstructions,
     this.tags,
     this.forms,
-    this.shiftStatus,
     this.shiftProgressNote,
     this.patient,
     this.useServiceDuration,
-    this.clientName,
-    this.clientLocation,
-    this.clientServiceType,
   });
 
   factory Shift.fromJson(Map<String, dynamic> json) {
-    // Debug logging to see the structure
-    debugPrint('🔍 Parsing Shift JSON: ${json.keys}');
-    debugPrint('🔍 Client data: ${json['client']}');
-
-    final clientName = json['client']?['name'] ?? json['client_name'];
-    final clientLocation =
-        json['client']?['patient_location'] ?? json['client_location'];
-    final clientServiceType =
-        json['client']?['service_type'] ?? json['client_service_type'];
-
-    debugPrint('🔍 Parsed clientName: $clientName');
-    debugPrint('🔍 Parsed clientLocation: $clientLocation');
+    int? parseBigInt(dynamic value) {
+      if (value == null) return null;
+      if (value is num) return value.toInt();
+      if (value is String) return int.tryParse(value);
+      return null;
+    }
 
     return Shift(
-      shiftId: json['shift_id'],
-      clientId: json['client_id'],
-      empId: json['emp_id'],
-      date: json['date'],
-      shiftStartTime: json['shift_start_time'],
-      shiftEndTime: json['shift_end_time'],
-      taskId: json['task_id'],
-      skills: json['skills'],
-      serviceInstructions: json['service_instructions'],
-      tags: json['tags'],
-      forms: json['forms'],
-      shiftStatus: json['shift_status'],
-      shiftProgressNote: json['shift_progress_note'],
-      patient: null, // No patient join for now
-      useServiceDuration: json['use_service_duration'],
-      clientName: clientName,
-      clientLocation: clientLocation,
-      clientServiceType: clientServiceType,
+      shiftId: parseBigInt(json['shift_id']) ?? 0,
+      empId: parseBigInt(json['emp_id']),
+      clientId: parseBigInt(json['client_id']),
+      shiftStatus: json['shift_status']?.toString(),
+      shiftStartTime: json['shift_start_time']?.toString(),
+      shiftEndTime: json['shift_end_time']?.toString(),
+      clockIn: json['clock_in'] != null
+          ? DateTime.parse(json['clock_in'].toString())
+          : null,
+      clockOut: json['clock_out'] != null
+          ? DateTime.parse(json['clock_out'].toString())
+          : null,
+      date: json['date']?.toString(),
+      shiftType: json['shift_type']?.toString(),
+      client: () {
+        final clientData = json['client'];
+        if (clientData == null) return null;
+        if (clientData is List && clientData.isNotEmpty) {
+          final first = clientData.first;
+          if (first is Map) {
+            return Client.fromJson(Map<String, dynamic>.from(first));
+          }
+        } else if (clientData is Map) {
+          return Client.fromJson(Map<String, dynamic>.from(clientData));
+        }
+        return null;
+      }(),
+      taskId: json['task_id']?.toString(),
+      skills: json['skills'] is List
+          ? (json['skills'] as List).join(', ')
+          : json['skills']?.toString(),
+      serviceInstructions: json['service_instructions']?.toString(),
+      tags: json['tags'] is List
+          ? (json['tags'] as List).join(', ')
+          : json['tags']?.toString(),
+      forms: json['forms'] is List
+          ? (json['forms'] as List).join(', ')
+          : json['forms']?.toString(),
+      shiftProgressNote: json['shift_progress_note']?.toString(),
+      patient: null,
+      useServiceDuration: json['use_service_duration']?.toString(),
     );
   }
 
@@ -98,6 +118,13 @@ class Shift {
     };
   }
 
+  // Compatibility getters
+  String? get clientName =>
+      client?.name ??
+      '${client?.firstName ?? ''} ${client?.lastName ?? ''}'.trim();
+  String? get clientLocation => client?.fullAddress;
+  String? get clientServiceType => client?.serviceType ?? client?.status;
+
   Shift copyWith({
     int? shiftId,
     int? clientId,
@@ -114,8 +141,7 @@ class Shift {
     String? shiftProgressNote,
     Patient? patient,
     String? useServiceDuration,
-    String? clientName,
-    String? clientLocation,
+    Client? client,
   }) {
     return Shift(
       shiftId: shiftId ?? this.shiftId,
@@ -133,8 +159,7 @@ class Shift {
       shiftProgressNote: shiftProgressNote ?? this.shiftProgressNote,
       patient: patient ?? this.patient,
       useServiceDuration: useServiceDuration ?? this.useServiceDuration,
-      clientName: clientName ?? this.clientName,
-      clientLocation: clientLocation ?? this.clientLocation,
+      client: client ?? this.client,
     );
   }
 
@@ -173,27 +198,37 @@ class Shift {
   // Helper method to parse various time formats
   static DateTime? _parseTimeAny(String? input) {
     if (input == null || input.isEmpty) return null;
+
+    // 1. Try ISO8601 (e.g., "2026-01-22T14:45:00")
     try {
-      // 1. Try ISO8601 (e.g., "2026-01-22T14:45:00")
       return DateTime.parse(input);
-    } catch (_) {
-      // 2. Try HH:mm:ss or HH:mm (e.g., "14:45:00")
+    } catch (_) {}
+
+    // 2. Try DateFormat parsing for common formats
+    final formats = [
+      'h:mm a',
+      'hh:mm a',
+      'HH:mm:ss',
+      'HH:mm',
+    ];
+
+    for (final format in formats) {
       try {
-        final parts = input.split(':');
-        if (parts.length >= 2) {
-          final now = DateTime.now();
-          return DateTime(
-            now.year,
-            now.month,
-            now.day,
-            int.parse(parts[0]),
-            int.parse(parts[1]),
-          );
-        }
-      } catch (e) {
-        debugPrint('Err parsing time: $input');
-      }
+        final parsed = DateFormat(format).parse(input);
+        final now = DateTime.now();
+        // Shift time into "today" to make difference calculations work
+        return DateTime(
+          now.year,
+          now.month,
+          now.day,
+          parsed.hour,
+          parsed.minute,
+          parsed.second,
+        );
+      } catch (_) {}
     }
+
+    debugPrint('⚠️ _parseTimeAny: Failed to parse "$input"');
     return null;
   }
 
@@ -245,4 +280,63 @@ class Shift {
     }
     return '$formattedStartTime - $formattedEndTime';
   }
+
+  // Helper method to determine how active a shift is today
+  // 3 = In progress
+  // 2 = Starting soon (within 2 hours)
+  // 1 = Just ended (within 4 hours)
+  // 0 = Not currently active
+  int get shiftTimeScore {
+    if (shiftStartTime == null || shiftEndTime == null) return 0;
+    try {
+      final now = DateTime.now();
+
+      // Parse current hour/min for comparison
+      final currentTotalMinutes = now.hour * 60 + now.minute;
+
+      int parseTimeString(String timeStr) {
+        String cleanTime = timeStr.trim().toUpperCase();
+        bool isPM = cleanTime.contains('PM');
+        bool isAM = cleanTime.contains('AM');
+        cleanTime = cleanTime.replaceAll(RegExp(r'[A-Z\s]'), '');
+
+        final parts = cleanTime.split(':');
+        int hours = int.parse(parts[0]);
+        int minutes = int.parse(parts[1]);
+
+        if (isPM && hours < 12) hours += 12;
+        if (isAM && hours == 12) hours = 0;
+
+        return hours * 60 + minutes;
+      }
+
+      final startTotalMinutes = parseTimeString(shiftStartTime!);
+      final endTotalMinutes = parseTimeString(shiftEndTime!);
+
+      // 1. Shift is currently in progress (active)
+      if (currentTotalMinutes >= startTotalMinutes &&
+          currentTotalMinutes <= endTotalMinutes) {
+        return 3;
+      }
+
+      // 2. Shift is starting soon (within the next 2 hours)
+      if (startTotalMinutes > currentTotalMinutes &&
+          (startTotalMinutes - currentTotalMinutes) <= 120) {
+        return 2;
+      }
+
+      // 3. Shift JUST ended (within the last 4 hours)
+      if (currentTotalMinutes > endTotalMinutes &&
+          (currentTotalMinutes - endTotalMinutes) <= 240) {
+        return 1;
+      }
+
+      return 0;
+    } catch (e) {
+      debugPrint('Error calculating shiftTimeScore for $shiftStartTime: $e');
+      return 0;
+    }
+  }
+
+  bool get isActiveOrUpcoming => shiftTimeScore > 0;
 }

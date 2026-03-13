@@ -76,90 +76,78 @@ class _ShiftPageState extends State<ShiftPage> {
       }
 
       // 2. Fetch All Shifts
-      final response = await supabase
-          .from('shift')
-          .select()
-          .eq('emp_id', empId)
-          .order('date')
-          .order('shift_start_time');
+      final response = await supabase.from('shift').select('''
+            shift_id,
+            emp_id,
+            client_id,
+            shift_status,
+            shift_start_time,
+            shift_end_time,
+            start_ts,
+            clock_in,
+            clock_out,
+            date,
+            shift_type,
+            task_id
+          ''').eq('emp_id', empId).order('date').order('shift_start_time');
 
       debugPrint('📥 Raw fetched rows = ${response.length}');
 
-      // Get unique client IDs
-      final clientIds = response
-          .where((s) => s['client_id'] != null)
-          .map((s) => s['client_id'] as int)
-          .toSet()
-          .toList();
+      final rawShifts = List<Map<String, dynamic>>.from(response);
 
-      debugPrint('📋 Unique client IDs to fetch: $clientIds');
+      // 3. Collect unique client IDs safely
+      final Set<int> clientIds = {};
+      for (final shift in rawShifts) {
+        final cidRaw = shift['client_id'];
+        if (cidRaw != null) {
+          int? parsedCid;
+          if (cidRaw is int)
+            parsedCid = cidRaw;
+          else if (cidRaw is num)
+            parsedCid = cidRaw.toInt();
+          else if (cidRaw is String) parsedCid = int.tryParse(cidRaw);
 
-      // Fetch all clients in bulk
+          if (parsedCid != null) {
+            clientIds.add(parsedCid);
+          }
+        }
+      }
+
+      // 4. Fetch and map clients from client_final
       Map<int, Map<String, dynamic>> clientsMap = {};
       if (clientIds.isNotEmpty) {
         try {
-          debugPrint('🔍 Attempting to fetch clients with IDs: $clientIds');
+          final clientResponse = await supabase
+              .from('client_final')
+              .select()
+              .inFilter('id', clientIds.toList());
 
-          final clientsResponse = await supabase
-              .from('client')
-              .select(
-                  'client_id, name, patient_location, address_line1, city, province, service_type')
-              .inFilter('client_id', clientIds);
-
-          debugPrint('👥 Fetched ${clientsResponse.length} clients');
-          debugPrint('👥 Client response data: $clientsResponse');
-
-          for (var client in clientsResponse) {
-            clientsMap[client['client_id']] = client;
-            debugPrint(
-                '  ✅ Loaded client ${client['client_id']}: ${client['name']}');
+          for (final c in clientResponse) {
+            final cid = (c['id'] as num).toInt();
+            clientsMap[cid] = Map<String, dynamic>.from(c);
           }
-        } catch (e, stack) {
-          debugPrint('⚠️ Error fetching clients: $e');
-          debugPrint('⚠️ Stack trace: $stack');
+        } catch (e) {
+          debugPrint('⚠️ Error fetching client details: $e');
         }
       }
 
-      // Parse shifts and attach client data
-      final shifts = <Shift>[];
-      for (var json in response) {
-        final clientId = json['client_id'] as int?;
-        final clientData = clientId != null ? clientsMap[clientId] : null;
+      // 5. Attach clients and Parse shifts
+      final shifts = rawShifts.map((rawJson) {
+        final json =
+            Map<String, dynamic>.from(rawJson); // Clone to ensure mutability
+        final cidRaw = json['client_id'];
+        int? parsedCid;
+        if (cidRaw is int)
+          parsedCid = cidRaw;
+        else if (cidRaw is num)
+          parsedCid = cidRaw.toInt();
+        else if (cidRaw is String) parsedCid = int.tryParse(cidRaw);
 
-        // Add client data to JSON
-        if (clientData != null) {
-          json['client_name'] = clientData['name'];
-          json['client_service_type'] = clientData['service_type'];
-
-          // Build location string from available data
-          final locationParts = <String>[];
-          if (clientData['patient_location'] != null &&
-              clientData['patient_location'].toString().isNotEmpty) {
-            locationParts.add(clientData['patient_location']);
-          } else {
-            // Fallback to address fields
-            if (clientData['address_line1'] != null &&
-                clientData['address_line1'].toString().isNotEmpty) {
-              locationParts.add(clientData['address_line1']);
-            }
-            if (clientData['city'] != null &&
-                clientData['city'].toString().isNotEmpty) {
-              locationParts.add(clientData['city']);
-            }
-            if (clientData['province'] != null &&
-                clientData['province'].toString().isNotEmpty) {
-              locationParts.add(clientData['province']);
-            }
-          }
-
-          json['client_location'] =
-              locationParts.isNotEmpty ? locationParts.join(', ') : null;
-          debugPrint(
-              '✅ Attached client data for shift ${json['shift_id']}: ${clientData['name']} at ${json['client_location']}');
+        if (parsedCid != null && clientsMap.containsKey(parsedCid)) {
+          json['client'] = clientsMap[parsedCid];
         }
-
-        shifts.add(Shift.fromJson(json));
-      }
+        return Shift.fromJson(json);
+      }).toList();
 
       setState(() {
         _allShifts = shifts;
@@ -418,7 +406,7 @@ class _ShiftPageState extends State<ShiftPage> {
                                         .withValues(alpha: 0.3)),
                                 const SizedBox(height: 16),
                                 Text(
-                                  'No shifts found for selected filters',
+                                  'No live shift available',
                                   style: theme.textTheme.bodyLarge?.copyWith(
                                     color: colorScheme.onSurface
                                         .withValues(alpha: 0.6),
@@ -571,6 +559,27 @@ class _ShiftPageState extends State<ShiftPage> {
                             ),
                           ],
                         ),
+                        const SizedBox(height: 12),
+
+                        // CLIENT NAME (ADDED BACK TO CARD FOR BETTER DASHBOARD)
+                        Row(
+                          children: [
+                            Icon(Icons.person_pin_rounded,
+                                size: 18, color: theme.colorScheme.primary),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                shift.clientName ?? 'Unknown Client',
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: theme.colorScheme.onSurface,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+
                         const SizedBox(height: 12),
 
                         // IMPROVED DATE & TIME DISPLAY

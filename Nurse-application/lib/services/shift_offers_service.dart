@@ -24,42 +24,74 @@ class ShiftOffersService {
       }
 
       // 2. Fetch Shifts
-      final shiftsResponse = await supabase
-          .from('shift')
-          .select()
-          .filter('shift_id', 'in', '(${shiftIds.join(',')})');
+      final shiftsResponse = await supabase.from('shift').select('''
+            shift_id,
+            emp_id,
+            client_id,
+            shift_status,
+            shift_start_time,
+            shift_end_time,
+            start_ts,
+            clock_in,
+            clock_out,
+            date,
+            shift_type,
+            task_id
+          ''').filter('shift_id', 'in', '(${shiftIds.join(',')})');
+
       final shifts = List<Map<String, dynamic>>.from(shiftsResponse);
       final shiftMap = {
         for (var s in shifts) (s['shift_id'] as num).toInt(): s
       };
 
-      // 3. Collect Client IDs from Shifts
-      final clientIds = shifts
-          .map((s) => (s['client_id'] as num?)?.toInt())
-          .where((id) => id != null)
-          .toSet()
-          .toList();
+      // 3. Collect distinct Client IDs safely
+      final Set<int> clientIds = {};
+      for (final s in shifts) {
+        final cidRaw = s['client_id'];
+        if (cidRaw != null) {
+          int? parsedCid;
+          if (cidRaw is num)
+            parsedCid = cidRaw.toInt();
+          else if (cidRaw is String) parsedCid = int.tryParse(cidRaw);
+          if (parsedCid != null) clientIds.add(parsedCid);
+        }
+      }
 
-      // 4. Fetch Clients
-      final Map<int, Map<String, dynamic>> clientMap;
+      // 4. Fetch Client Data
+      Map<int, Map<String, dynamic>> clientsMap = {};
       if (clientIds.isNotEmpty) {
-        final clientsResponse = await supabase
-            .from('client')
-            .select()
-            .filter('client_id', 'in', '(${clientIds.join(',')})');
-        final clients = List<Map<String, dynamic>>.from(clientsResponse);
-        clientMap = {for (var c in clients) (c['client_id'] as num).toInt(): c};
-      } else {
-        clientMap = {};
+        try {
+          final clientsResponse = await supabase
+              .from('client_final')
+              .select()
+              .inFilter('id', clientIds.toList());
+          for (final c in clientsResponse) {
+            final cid = (c['id'] as num).toInt();
+            clientsMap[cid] = Map<String, dynamic>.from(c);
+          }
+        } catch (e) {
+          debugPrint('⚠️ Error enriching clients in offers: $e');
+        }
       }
 
       // 5. Construct ShiftOfferRecords
-      return rawOffers.map((json) {
+      return rawOffers.map((offerJson) {
+        final json =
+            Map<String, dynamic>.from(offerJson); // Be safe with offer maps
         final shiftId = (json['shift_id'] as num?)?.toInt();
         final shiftData = shiftMap[shiftId];
 
-        final clientId = (shiftData?['client_id'] as num?)?.toInt();
-        final clientData = clientMap[clientId];
+        Map<String, dynamic>? clientData;
+        if (shiftData != null) {
+          final cidRaw = shiftData['client_id'];
+          int? parsedCid;
+          if (cidRaw is num)
+            parsedCid = cidRaw.toInt();
+          else if (cidRaw is String) parsedCid = int.tryParse(cidRaw);
+          if (parsedCid != null) {
+            clientData = clientsMap[parsedCid];
+          }
+        }
 
         // Parse base offer
         final baseOffer = ShiftOfferRecord.fromJson(json);
@@ -101,12 +133,12 @@ class ShiftOffersService {
           .from('shift_offers')
           .select()
           .eq('emp_id', empId)
-          .order('sent_at', ascending: false);
+          .order('created_at', ascending: false);
 
       debugPrint('🔍 Raw response length for emp $empId: ${response.length}');
       if (response.isNotEmpty) {
         debugPrint('🔍 First offer status: ${response[0]['status']}');
-        debugPrint('🔍 First offer ID: ${response[0]['offers_id']}');
+        debugPrint('🔍 First offer ID: ${response[0]['offer_id']}');
       }
 
       final offers =
@@ -130,7 +162,7 @@ class ShiftOffersService {
           .select()
           .eq('emp_id', empId)
           .filter('status', 'in', '("pending","sent")')
-          .order('sent_at', ascending: false);
+          .order('created_at', ascending: false);
 
       debugPrint('🔍 Raw PENDING response length: ${response.length}');
 
@@ -155,7 +187,7 @@ class ShiftOffersService {
           .select()
           .eq('emp_id', empId)
           .eq('status', 'accepted')
-          .order('sent_at', ascending: false);
+          .order('created_at', ascending: false);
 
       final offers =
           await _enrichOffers(List<Map<String, dynamic>>.from(response));
@@ -178,7 +210,7 @@ class ShiftOffersService {
           .select()
           .eq('emp_id', empId)
           .eq('status', 'rejected')
-          .order('sent_at', ascending: false);
+          .order('created_at', ascending: false);
 
       final offers =
           await _enrichOffers(List<Map<String, dynamic>>.from(response));
@@ -202,10 +234,18 @@ class ShiftOffersService {
       debugPrint('📤 Updating offer $offersId to status: $status');
 
       // 1. Update the offer status
-      await supabase.from('shift_offers').update({
+      final updateData = {
         'status': status,
-        'response_time': DateTime.now().toIso8601String(),
-      }).eq('offers_id', offersId);
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+      if (status == 'accepted') {
+        updateData['accepted_at'] = DateTime.now().toIso8601String();
+      }
+
+      await supabase
+          .from('shift_offers')
+          .update(updateData)
+          .eq('offer_id', offersId);
 
       // 2. If accepted, update the actual shift to assign the employee
       if (status == 'accepted' && shiftId != null && empId != null) {
@@ -274,7 +314,7 @@ class ShiftOffersService {
       final response = await supabase
           .from('shift_offers')
           .select()
-          .eq('offers_id', offersId)
+          .eq('offer_id', offersId)
           .maybeSingle();
 
       if (response == null) return null;

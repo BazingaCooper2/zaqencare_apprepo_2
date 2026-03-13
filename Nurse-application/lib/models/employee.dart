@@ -6,7 +6,8 @@ class Employee {
   final String? phone;
   final String? designation;
   final String? address;
-  final String? status;
+  final String? status; // Dart field kept as 'status' for backward compat;
+  //                       mapped from DB column 'Employee_status'
   final String? skills;
   final String? qualifications;
   final String? imageUrl;
@@ -26,18 +27,26 @@ class Employee {
   });
 
   factory Employee.fromJson(Map<String, dynamic> json) {
+    // emp_id: DB type changed bigint → integer; handle both num types safely.
+    final rawEmpId = json['emp_id'];
+    final empId = rawEmpId is num ? rawEmpId.toInt() : 0;
+
+    // 'status' column was renamed to 'Employee_status' in employee_final.
+    // Accept both keys so the model still works if old data is ever encountered.
+    final status = (json['Employee_status'] ?? json['status']) as String?;
+
     return Employee(
-      empId: json['emp_id'],
-      firstName: json['first_name'],
-      lastName: json['last_name'],
-      email: json['email'],
-      phone: json['phone'],
-      designation: json['designation'],
-      address: json['address'],
-      status: json['status'],
-      skills: json['skills'],
-      qualifications: json['qualifications'],
-      imageUrl: json['image_url'],
+      empId: empId,
+      firstName: json['first_name'] as String? ?? '',
+      lastName: json['last_name'] as String? ?? '',
+      email: json['email'] as String?,
+      phone: json['phone'] as String?,
+      designation: json['designation'] as String?,
+      address: json['address'] as String?,
+      status: status,
+      skills: json['skills'] as String?,
+      qualifications: json['qualifications'] as String?,
+      imageUrl: json['image_url'] as String?,
     );
   }
 
@@ -50,7 +59,8 @@ class Employee {
       'phone': phone,
       'designation': designation,
       'address': address,
-      'status': status,
+      // Write back using the new column name.
+      'Employee_status': status,
       'skills': skills,
       'qualifications': qualifications,
       'image_url': imageUrl,
