@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:nurse_tracking_app/pages/login_page.dart';
 import 'package:nurse_tracking_app/pages/dashboard_page.dart';
 import 'package:nurse_tracking_app/services/session.dart';
-import 'package:nurse_tracking_app/widgets/custom_loading_screen.dart';
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -15,11 +14,12 @@ class _SplashPageState extends State<SplashPage> {
   @override
   void initState() {
     super.initState();
-    _redirect();
+    _checkLoginStatus();
   }
 
-  Future<void> _redirect() async {
-    await Future.delayed(Duration.zero);
+  Future<void> _checkLoginStatus() async {
+    // Wait for Splash animation or and ensure initialization is complete
+    await Future.delayed(const Duration(seconds: 1));
     if (!mounted) return;
 
     final empId = await SessionManager.getEmpId();
@@ -28,11 +28,11 @@ class _SplashPageState extends State<SplashPage> {
 
     if (empId != null) {
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const DashboardPage()),
+        MaterialPageRoute(builder: (_) => const DashboardPage()),
       );
     } else {
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const LoginPage()),
+        MaterialPageRoute(builder: (_) => const LoginPage()),
       );
     }
   }
@@ -40,9 +40,10 @@ class _SplashPageState extends State<SplashPage> {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      body: CustomLoadingScreen(
-        message: 'Loading your preferences...',
+      body: Center(
+        child: CircularProgressIndicator(),
       ),
     );
   }
 }
+

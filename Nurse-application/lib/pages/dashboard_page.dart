@@ -170,7 +170,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     Theme.of(context)
                         .colorScheme
                         .primary
-                        .withValues(alpha: 0.05),
+                        .withOpacity(0.05),
                     Theme.of(context).colorScheme.surface,
                   ],
                 ),
@@ -381,7 +381,7 @@ class _DashboardCard extends StatelessWidget {
       height: isFeatured ? 180 : 160,
       child: Card(
         elevation: 4,
-        shadowColor: color.withValues(alpha: 0.3),
+        shadowColor: color.withOpacity(0.3),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         child: InkWell(
           onTap: onTap,
@@ -394,8 +394,8 @@ class _DashboardCard extends StatelessWidget {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  color.withValues(alpha: 0.15),
-                  color.withValues(alpha: 0.05),
+                  color.withOpacity(0.15),
+                  color.withOpacity(0.05),
                 ],
               ),
             ),
@@ -420,7 +420,7 @@ class _DashboardCard extends StatelessWidget {
                 title,
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: Colors.black87,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
               ),
               if (subtitle != null) ...[
@@ -428,7 +428,7 @@ class _DashboardCard extends StatelessWidget {
                 Text(
                   subtitle!,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.grey[700],
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                       ),
                 ),
               ],
@@ -441,7 +441,7 @@ class _DashboardCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(30),
                   boxShadow: [
                     BoxShadow(
-                      color: color.withValues(alpha: 0.4),
+                      color: color.withOpacity(0.4),
                       blurRadius: 8,
                       offset: const Offset(0, 4),
                     ),
@@ -457,11 +457,11 @@ class _DashboardCard extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.6),
+            color: Theme.of(context).colorScheme.surface.withOpacity(0.6),
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: color.withValues(alpha: 0.2),
+                color: color.withOpacity(0.2),
                 blurRadius: 12,
                 offset: const Offset(0, 6),
               ),
@@ -484,11 +484,11 @@ class _DashboardCard extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.6),
+            color: Theme.of(context).colorScheme.surface.withOpacity(0.6),
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: color.withValues(alpha: 0.2),
+                color: color.withOpacity(0.2),
                 blurRadius: 8,
                 offset: const Offset(0, 4),
               ),
@@ -505,7 +505,7 @@ class _DashboardCard extends StatelessWidget {
           title,
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.bold,
-                color: Colors.black87,
+                color: Theme.of(context).colorScheme.onSurface,
               ),
           textAlign: TextAlign.center,
         ),

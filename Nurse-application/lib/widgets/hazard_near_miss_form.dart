@@ -150,6 +150,7 @@ class _HazardNearMissFormState extends State<HazardNearMissForm> {
   }
 
   Future<void> _submitForm() async {
+    print("SUBMITTING HAZARD REPORT SESSION: ${Supabase.instance.client.auth.currentSession}");
     if (!_formKey.currentState!.validate()) return;
 
     if (_incidentDate == null || _incidentTime == null) {
@@ -170,8 +171,7 @@ class _HazardNearMissFormState extends State<HazardNearMissForm> {
     setState(() => _isSubmitting = true);
 
     try {
-      final empId = await SessionManager.getEmpId();
-      if (empId == null) {
+      if (SessionManager.empId == null) {
         if (mounted) {
           context.showSnackBar('You must be logged in to submit a report.',
               isError: true);
@@ -213,8 +213,14 @@ Signature URL: ${_uploadedSignatureUrl ?? 'Not Signed'}
 ''';
 
       // Prepare data for Supabase insert
+      // Debug session info before insert
+      print("CURRENT USER: ${supabase.auth.currentUser}");
+      print("CURRENT SESSION: ${supabase.auth.currentSession}");
+      print("SESSION USER ID: ${supabase.auth.currentUser?.id}");
+      print("EMP ID BEING SENT: ${SessionManager.empId}");
+
       final data = {
-        'emp_id': empId,
+        'emp_id': SessionManager.empId,
         'incident_date': DateFormat('yyyy-MM-dd').format(_incidentDate!),
         'incident_time':
             '${_incidentTime!.hour.toString().padLeft(2, '0')}:${_incidentTime!.minute.toString().padLeft(2, '0')}:00',
@@ -224,10 +230,15 @@ Signature URL: ${_uploadedSignatureUrl ?? 'Not Signed'}
         'hazard_statement': extendedStatement, // Using the extended statement
         'immediate_action': _immediateActionController.text.trim(),
         'documented_on_hazard_board': _documentedOnBoard,
+        'reporter_name': _witnessNameController.text.trim(),
+        'created_at': DateTime.now().toIso8601String(),
       };
 
-      // Insert into Supabase
-      await supabase.from('hazard_near_miss_reports').insert(data);
+      // Insert into Supabase with .select()
+      final response = await supabase.from('hazard_near_miss_reports').insert(data).select();
+      
+      print("🚀 Hazard Insert Result: $response");
+      debugPrint('✅ Hazard report successfully inserted into Supabase');
 
       // Send email notification (passing distinct fields for better formatting)
       final emailSent = await EmailService.sendHazardReportEmail(

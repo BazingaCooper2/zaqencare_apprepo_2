@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../main.dart';
 import '../models/employee.dart';
 import '../models/shift.dart';
@@ -173,120 +172,134 @@ class _ShiftPageState extends State<ShiftPage> {
     }
   }
 
+  // ─── Safe date parser ─────────────────────────────────────────────────────
+  // Parses shift.date (TEXT "YYYY-MM-DD") into a LOCAL midnight DateTime.
+  // Never calls .toLocal() on a UTC parse so timezone offsets can't shift
+  // "2026-03-28" to "2026-03-27" on UTC+5:30 devices.
+  static DateTime? _parseDateLocal(String? dateStr) {
+    if (dateStr == null || dateStr.isEmpty) return null;
+    // Take only the first 10 chars ("YYYY-MM-DD") regardless of
+    // whether the value is a full timestamp or a plain date.
+    final datePart = dateStr.length >= 10 ? dateStr.substring(0, 10) : dateStr;
+    final parts = datePart.split('-');
+    if (parts.length != 3) return null;
+    final y = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    final d = int.tryParse(parts[2]);
+    if (y == null || m == null || d == null) return null;
+    return DateTime(y, m, d); // local, no timezone issues
+  }
+
+  // ─── Status normalizer ────────────────────────────────────────────────────
+  // Uses .contains() so it handles any capitalisation from the DB:
+  //   "scheduled" / "Scheduled" / "SCHEDULED" → 'scheduled'
+  //   "Clocked in" / "clocked in" / "clocked_in" → 'clocked_in'
+  //   "Clocked out" / "clocked out" / "clocked_out" → 'clocked_out'
+  static String _normalizeStatus(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return '';
+    final s = raw.toLowerCase().trim();
+    if (s.contains('clocked out') || s == 'clocked_out' ||
+        s == 'completed'         || s == 'ended_early') return 'clocked_out';
+    if (s.contains('clocked in')  || s == 'clocked_in' ||
+        s == 'active'             || s == 'in_progress') return 'clocked_in';
+    if (s.contains('cancel'))  return 'cancelled';
+    if (s.contains('scheduled')) return 'scheduled'; // catches 'scheduled', 'Scheduled'
+    return s;
+  }
+
   void _applyFilters() {
-    List<Shift> filtered = List.from(_allShifts);
-
     final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+    final todayLocal = DateTime(now.year, now.month, now.day);
 
-    if (_selectedDateFilter == 'Today') {
-      filtered = filtered.where((shift) {
-        if (shift.date == null) return false;
-        try {
-          final shiftDate = DateTime.parse(shift.date!);
-          final shiftDateOnly =
-              DateTime(shiftDate.year, shiftDate.month, shiftDate.day);
-          return shiftDateOnly.isAtSameMomentAs(today);
-        } catch (_) {
-          return false;
-        }
-      }).toList();
-    } else if (_selectedDateFilter == 'This Week') {
-      final daysFromMonday = now.weekday - 1;
-      final monday = today.subtract(Duration(days: daysFromMonday));
-      final sunday = monday.add(const Duration(days: 6));
+    // ── DEBUG tracing ─────────────────────────────────────────────────────────
+    debugPrint('════════════════════════════════════════════════════════════════');
+    debugPrint('🔍 APPLY FILTERS: date=$_selectedDateFilter | statuses=$_selectedStatuses');
+    debugPrint('📅 Today Local: $todayLocal | allShifts=${_allShifts.length}');
 
-      filtered = filtered.where((shift) {
-        if (shift.date == null) return false;
-        try {
-          final shiftDate = DateTime.parse(shift.date!);
-          final shiftDateOnly =
-              DateTime(shiftDate.year, shiftDate.month, shiftDate.day);
-          return shiftDateOnly.compareTo(monday) >= 0 &&
-              shiftDateOnly.compareTo(sunday) <= 0;
-        } catch (_) {
-          return false;
-        }
-      }).toList();
-    } else if (_selectedDateFilter == 'Next Scheduled') {
-      List<Shift> nextShifts = [];
+    List<Shift> filtered;
+
+    // NEXT SCHEDULED is a special case (pins active shift at top)
+    if (_selectedDateFilter == 'Next Scheduled') {
       Shift? activeShift;
-
-      // 1. Find and separate Active Shift (RPC Authority)
       if (_activeShiftId != null) {
         try {
-          activeShift =
-              _allShifts.firstWhere((s) => s.shiftId == _activeShiftId);
-        } catch (_) {
-          // Active shift might not be in the loaded list if pagination was used,
-          // but here we load all, so it should be there.
-        }
+          activeShift = _allShifts.firstWhere((s) => s.shiftId == _activeShiftId);
+        } catch (_) {}
       }
 
-      // 2. Filter the rest (Standard Future Logic)
-      nextShifts = _allShifts.where((shift) {
-        // Exclude the active shift as we add it explicitly at the top
+      final remaining = _allShifts.where((shift) {
         if (shift.shiftId == _activeShiftId) return false;
 
-        if (shift.date == null) return false;
-        try {
-          final shiftDate = DateTime.parse(shift.date!);
-          final shiftDateOnly =
-              DateTime(shiftDate.year, shiftDate.month, shiftDate.day);
+        final shiftDate = _parseDateLocal(shift.date);
+        if (shiftDate == null) return false;
 
-          // Include today and future dates
-          if (shiftDateOnly.isBefore(today)) {
-            return false;
-          }
+        final status = _normalizeStatus(shift.shiftStatus);
 
-          // Show all shifts from today onwards
-          return true;
-        } catch (_) {
-          return false;
+        // Date check: Today or Future
+        final matchesDate = shiftDate.isAtSameMomentAs(todayLocal) || shiftDate.isAfter(todayLocal);
+
+        // Status check: If no status filter, only show actionable ones
+        final matchesStatus = _selectedStatuses.isEmpty
+            ? (status == 'scheduled' || status == 'clocked_in')
+            : _selectedStatuses.contains(status);
+
+        return matchesDate && matchesStatus;
+      }).toList()
+        ..sort((a, b) {
+          final da = _parseDateLocal(a.date) ?? DateTime(9999);
+          final db = _parseDateLocal(b.date) ?? DateTime(9999);
+          final cmp = da.compareTo(db);
+          if (cmp != 0) return cmp;
+          return (a.shiftStartTime ?? '').compareTo(b.shiftStartTime ?? '');
+        });
+
+      filtered = [if (activeShift != null) activeShift, ...remaining];
+    } else {
+      // ALL OTHER TABS
+      filtered = _allShifts.where((shift) {
+        final shiftDate = _parseDateLocal(shift.date);
+        if (shiftDate == null) return false;
+
+        final status = _normalizeStatus(shift.shiftStatus);
+
+        // 1. DATE FILTER
+        bool matchesDate = false;
+        if (_selectedDateFilter == 'Today') {
+          matchesDate = shiftDate.isAtSameMomentAs(todayLocal);
+        } else if (_selectedDateFilter == 'This Week') {
+          final startOfWeek = todayLocal.subtract(Duration(days: todayLocal.weekday - 1));
+          final endOfWeek = startOfWeek.add(const Duration(days: 6));
+          matchesDate = !shiftDate.isBefore(startOfWeek) && !shiftDate.isAfter(endOfWeek);
+        } else if (_selectedDateFilter == 'Completed') {
+          // Completed tab filters by status, not date
+          matchesDate = (status == 'clocked_out' || status == 'cancelled');
+        } else {
+          // 'All' or unknown
+          matchesDate = true;
         }
+
+        // 2. STATUS FILTER
+        final matchesStatus = _selectedStatuses.isEmpty
+            ? true
+            : _selectedStatuses.contains(status);
+
+        return matchesDate && matchesStatus;
       }).toList();
 
-      // Sort by date and time (earliest first)
-      nextShifts.sort((a, b) {
-        try {
-          final dateA = DateTime.parse(a.date ?? '');
-          final dateB = DateTime.parse(b.date ?? '');
-
-          final comparison = dateA.compareTo(dateB);
-          if (comparison != 0) return comparison;
-
-          // If same date, sort by start time
-          final timeA = a.shiftStartTime ?? '';
-          final timeB = b.shiftStartTime ?? '';
-          return timeA.compareTo(timeB);
-        } catch (_) {
-          return 0;
-        }
-      });
-
-      // 3. Combine: Active Shift (Top) + Remaining Future Shifts
-      filtered = [if (activeShift != null) activeShift, ...nextShifts];
-    } else if (_selectedDateFilter == 'Completed') {
-      filtered = filtered.where((shift) {
-        final status = shift.shiftStatus?.toLowerCase().replaceAll(' ', '_');
-        return status == 'completed' ||
-            status == 'ended_early' ||
-            status == 'cancelled';
-      }).toList();
-
-      // Sort: Completed shifts usually sorted by newest first
-      filtered.sort((a, b) {
-        final dateA = DateTime.tryParse(a.date ?? '') ?? DateTime(0);
-        final dateB = DateTime.tryParse(b.date ?? '') ?? DateTime(0);
-        return dateB.compareTo(dateA); // Descending
-      });
+      // Sort Completed: newest first
+      if (_selectedDateFilter == 'Completed') {
+        filtered.sort((a, b) {
+          final da = _parseDateLocal(a.date) ?? DateTime(0);
+          final db = _parseDateLocal(b.date) ?? DateTime(0);
+          return db.compareTo(da);
+        });
+      }
     }
 
-    if (_selectedStatuses.isNotEmpty) {
-      filtered = filtered.where((shift) {
-        final status = shift.shiftStatus?.toLowerCase().replaceAll(' ', '_');
-        return status != null && _selectedStatuses.contains(status);
-      }).toList();
+    // DEBUG print results
+    debugPrint("✅ After filtering: ${filtered.length} shift(s)");
+    for (var s in filtered) {
+      debugPrint("   → Showing shift #${s.shiftId} | ${s.date} | ${s.shiftStatus} | normalized=${_normalizeStatus(s.shiftStatus)}");
     }
 
     setState(() {
@@ -302,7 +315,10 @@ class _ShiftPageState extends State<ShiftPage> {
   }
 
   void _onStatusFilterToggled(String status) {
-    final normalized = status.toLowerCase().replaceAll(' ', '_');
+    // Normalize to internal key e.g. "Scheduled" -> "scheduled"
+    final normalized = _normalizeStatus(status);
+    if (normalized.isEmpty) return;
+
     setState(() {
       if (_selectedStatuses.contains(normalized)) {
         _selectedStatuses.remove(normalized);
@@ -381,10 +397,10 @@ class _ShiftPageState extends State<ShiftPage> {
                               'scheduled', 'Scheduled', Colors.orange),
                           const SizedBox(width: 8),
                           _buildStatusChip(
-                              'in_progress', 'In Progress', Colors.blue),
+                              'clocked_in', 'Clocked in', Colors.blue),
                           const SizedBox(width: 8),
                           _buildStatusChip(
-                              'completed', 'Completed', Colors.green),
+                              'clocked_out', 'Clocked out', Colors.green),
                           const SizedBox(width: 8),
                           _buildStatusChip(
                               'cancelled', 'Cancelled', Colors.red),
@@ -480,34 +496,14 @@ class _ShiftPageState extends State<ShiftPage> {
   }
 
   Widget _buildShiftCard(Shift shift, ThemeData theme) {
-    // Format Date nicely
-    String formattedDate = 'No date';
-    if (shift.date != null) {
-      try {
-        final parsed = DateTime.parse(shift.date!);
-        final now = DateTime.now();
-        final today = DateTime(now.year, now.month, now.day);
-        final tomorrow = today.add(const Duration(days: 1));
-        final shiftDate = DateTime(parsed.year, parsed.month, parsed.day);
-
-        if (shiftDate == today) {
-          formattedDate = 'Today, ${DateFormat('MMM d').format(parsed)}';
-        } else if (shiftDate == tomorrow) {
-          formattedDate = 'Tomorrow, ${DateFormat('MMM d').format(parsed)}';
-        } else {
-          formattedDate = DateFormat('EEEE, MMM d, yyyy').format(parsed);
-        }
-      } catch (_) {
-        formattedDate = shift.date!;
-      }
-    }
-
-    final timeRange = shift.formattedTimeRange; // Use 12-hour format
+    // Use clock-based helpers — correctly reads clock_in/clock_out timestamps
+    final formattedDate = shift.clockFormattedDate;
+    final timeRangeWithDuration = shift.clockFormattedTimeRangeWithDuration;
     final statusColor = shift.statusColor;
     final statusText = shift.statusDisplayText;
     final normalized = shift.shiftStatus?.toLowerCase().replaceAll(' ', '_');
     final canComplete =
-        normalized == 'scheduled' || normalized == 'in_progress';
+        normalized == 'scheduled' || normalized == 'in_progress' || normalized == 'active' || normalized == 'clocked_in';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
@@ -616,7 +612,7 @@ class _ShiftPageState extends State<ShiftPage> {
                                 ],
                               ),
                               const SizedBox(height: 6),
-                              Row(
+                                  Row(
                                 children: [
                                   Icon(Icons.access_time_rounded,
                                       size: 16,
@@ -624,7 +620,7 @@ class _ShiftPageState extends State<ShiftPage> {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      timeRange,
+                                      timeRangeWithDuration,
                                       style: const TextStyle(
                                         fontWeight: FontWeight.w600,
                                         fontSize: 14,
@@ -708,7 +704,13 @@ class _ShiftPageState extends State<ShiftPage> {
                   Expanded(
                     child: _buildInfoChip(
                       'Duration',
-                      '${shift.durationHours?.toStringAsFixed(1) ?? 'N/A'}h',
+                      () {
+                        final h = shift.clockDurationHours;
+                        if (h == null) return 'N/A';
+                        final hrs = h.floor();
+                        final mins = ((h - hrs) * 60).round();
+                        return mins > 0 ? '${hrs}h ${mins}m' : '${hrs}h';
+                      }(),
                       Colors.blue,
                     ),
                   ),
@@ -716,7 +718,14 @@ class _ShiftPageState extends State<ShiftPage> {
                   Expanded(
                     child: _buildInfoChip(
                       'Overtime',
-                      '${shift.overtimeHours?.toStringAsFixed(1) ?? 'N/A'}h',
+                      () {
+                        final h = shift.clockDurationHours;
+                        if (h == null) return 'N/A';
+                        final ot = h > 8 ? h - 8 : 0.0;
+                        final hrs = ot.floor();
+                        final mins = ((ot - hrs) * 60).round();
+                        return mins > 0 ? '${hrs}h ${mins}m' : '${hrs}h';
+                      }(),
                       Colors.orange,
                     ),
                   ),

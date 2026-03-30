@@ -50,9 +50,9 @@ class ShiftOffersService {
         final cidRaw = s['client_id'];
         if (cidRaw != null) {
           int? parsedCid;
-          if (cidRaw is num)
+          if (cidRaw is num) {
             parsedCid = cidRaw.toInt();
-          else if (cidRaw is String) parsedCid = int.tryParse(cidRaw);
+          } else if (cidRaw is String) parsedCid = int.tryParse(cidRaw);
           if (parsedCid != null) clientIds.add(parsedCid);
         }
       }
@@ -85,9 +85,9 @@ class ShiftOffersService {
         if (shiftData != null) {
           final cidRaw = shiftData['client_id'];
           int? parsedCid;
-          if (cidRaw is num)
+          if (cidRaw is num) {
             parsedCid = cidRaw.toInt();
-          else if (cidRaw is String) parsedCid = int.tryParse(cidRaw);
+          } else if (cidRaw is String) parsedCid = int.tryParse(cidRaw);
           if (parsedCid != null) {
             clientData = clientsMap[parsedCid];
           }

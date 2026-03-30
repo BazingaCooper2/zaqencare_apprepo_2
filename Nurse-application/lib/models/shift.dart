@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'client.dart';
 import 'patient.dart';
+import '../utils/shift_date_helpers.dart';
 
 class Shift {
   final int shiftId;
@@ -142,6 +143,8 @@ class Shift {
     Patient? patient,
     String? useServiceDuration,
     Client? client,
+    DateTime? clockIn,
+    DateTime? clockOut,
   }) {
     return Shift(
       shiftId: shiftId ?? this.shiftId,
@@ -150,6 +153,8 @@ class Shift {
       date: date ?? this.date,
       shiftStartTime: shiftStartTime ?? this.shiftStartTime,
       shiftEndTime: shiftEndTime ?? this.shiftEndTime,
+      clockIn: clockIn ?? this.clockIn,
+      clockOut: clockOut ?? this.clockOut,
       taskId: taskId ?? this.taskId,
       skills: skills ?? this.skills,
       serviceInstructions: serviceInstructions ?? this.serviceInstructions,
@@ -168,10 +173,13 @@ class Shift {
     switch (normalized) {
       case 'scheduled':
         return 'Scheduled';
+      case 'active':
       case 'in_progress':
-        return 'In Progress';
+      case 'clocked_in':
+        return 'Clocked in';
       case 'completed':
-        return 'Completed';
+      case 'clocked_out':
+        return 'Clocked out';
       case 'cancelled':
         return 'Cancelled';
       default:
@@ -184,9 +192,12 @@ class Shift {
     switch (normalized) {
       case 'scheduled':
         return Colors.orange;
+      case 'active':
       case 'in_progress':
+      case 'clocked_in':
         return Colors.blue;
       case 'completed':
+      case 'clocked_out':
         return Colors.green;
       case 'cancelled':
         return Colors.red;
@@ -241,7 +252,13 @@ class Shift {
 
     // If end is before start in time-only mode, mostly doesn't happen with full dates.
     // If it does (night shift), logic needs to handle date crossing, but usually full ISO handles it.
-    final diff = end.difference(start);
+    Duration diff = end.difference(start);
+
+    // Handle overnight shifts (e.g., 10 PM → 6 AM)
+    if (diff.isNegative) {
+      diff = end.add(const Duration(days: 1)).difference(start);
+    }
+
     return diff.inMinutes / 60.0;
   }
 
@@ -274,11 +291,65 @@ class Shift {
   String get formattedEndTime => formatTime12Hour(shiftEndTime);
 
   // Get formatted time range (e.g., "9:00 AM - 5:00 PM")
+  // Uses old text fields shiftStartTime/shiftEndTime (scheduled time)
   String get formattedTimeRange {
     if (shiftStartTime == null || shiftEndTime == null) {
       return 'Time not set';
     }
     return '$formattedStartTime - $formattedEndTime';
+  }
+
+  // ─── Clock-in / Clock-out timestamp getters ────────────────────────────
+  // These use the actual clock_in / clock_out timestamps from Supabase.
+  // Falls back to the scheduled start/end times for shifts not yet clocked.
+
+  String? get _displayStartTs {
+    if (clockIn != null) return clockIn!.toIso8601String();
+    if (shiftStartTime != null && shiftStartTime!.isNotEmpty) {
+      return shiftStartTime;
+    }
+    return null;
+  }
+
+  String? get _displayEndTs {
+    if (clockOut != null) return clockOut!.toIso8601String();
+    if (shiftEndTime != null && shiftEndTime!.isNotEmpty) return shiftEndTime;
+    return null;
+  }
+
+  /// Formatted date from clock_in timestamp.
+  /// Example: "Friday, Mar 27, 2026" or "Today, Mar 27"
+  String get clockFormattedDate {
+    if (clockIn != null) {
+      return ShiftDateHelpers.formatDate(clockIn!.toIso8601String());
+    }
+    if (date != null) {
+      return ShiftDateHelpers.formatDateFromDateString(date);
+    }
+    return '';
+  }
+
+  /// Formatted time range from actual clock_in / clock_out.
+  /// Example: "12:05 AM - 01:05 AM"
+  String get clockFormattedTimeRange =>
+      ShiftDateHelpers.formatTimeRange(_displayStartTs, _displayEndTs);
+
+  /// Formatted duration from clock_in / clock_out.
+  /// Example: "1h 0m"
+  String get clockFormattedDuration =>
+      ShiftDateHelpers.formatDuration(_displayStartTs, _displayEndTs);
+
+  /// Combined time range + duration.
+  /// Example: "12:05 AM - 01:05 AM (1h 0m)"
+  String get clockFormattedTimeRangeWithDuration =>
+      ShiftDateHelpers.formatTimeRangeWithDuration(
+          _displayStartTs, _displayEndTs);
+
+  /// Duration in decimal hours using actual clock_in/clock_out.
+  /// Falls back to the old shiftStartTime/shiftEndTime calculation.
+  double? get clockDurationHours {
+    final h = ShiftDateHelpers.getDurationHours(_displayStartTs, _displayEndTs);
+    return h ?? durationHours;
   }
 
   // Helper method to determine how active a shift is today
@@ -287,6 +358,13 @@ class Shift {
   // 1 = Just ended (within 4 hours)
   // 0 = Not currently active
   int get shiftTimeScore {
+    final status = shiftStatus?.toLowerCase().replaceAll(' ', '_');
+    if (status == 'clocked_in' ||
+        status == 'active' ||
+        status == 'in_progress') {
+      return 100; // Found a physically live shift
+    }
+
     if (shiftStartTime == null || shiftEndTime == null) return 0;
     try {
       final now = DateTime.now();
@@ -294,24 +372,18 @@ class Shift {
       // Parse current hour/min for comparison
       final currentTotalMinutes = now.hour * 60 + now.minute;
 
-      int parseTimeString(String timeStr) {
-        String cleanTime = timeStr.trim().toUpperCase();
-        bool isPM = cleanTime.contains('PM');
-        bool isAM = cleanTime.contains('AM');
-        cleanTime = cleanTime.replaceAll(RegExp(r'[A-Z\s]'), '');
-
-        final parts = cleanTime.split(':');
-        int hours = int.parse(parts[0]);
-        int minutes = int.parse(parts[1]);
-
-        if (isPM && hours < 12) hours += 12;
-        if (isAM && hours == 12) hours = 0;
-
-        return hours * 60 + minutes;
+      // Use the robust _parseTimeAny which handles ISO8601 datetimes
+      // (e.g. "2026-03-16T10:30:00") as well as plain time strings.
+      int? timeToMinutes(String? timeStr) {
+        final dt = _parseTimeAny(timeStr);
+        if (dt == null) return null;
+        return dt.hour * 60 + dt.minute;
       }
 
-      final startTotalMinutes = parseTimeString(shiftStartTime!);
-      final endTotalMinutes = parseTimeString(shiftEndTime!);
+      final startTotalMinutes = timeToMinutes(shiftStartTime!);
+      final endTotalMinutes = timeToMinutes(shiftEndTime!);
+
+      if (startTotalMinutes == null || endTotalMinutes == null) return 0;
 
       // 1. Shift is currently in progress (active)
       if (currentTotalMinutes >= startTotalMinutes &&

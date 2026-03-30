@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
-import 'package:nurse_tracking_app/main.dart'; // For Global keys/Supabase if needed
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:nurse_tracking_app/pages/dashboard_page.dart';
 import 'package:nurse_tracking_app/services/session.dart';
 import 'package:nurse_tracking_app/services/shift_offer_helper.dart';
@@ -28,23 +28,21 @@ class _LoginPageState extends State<LoginPage> {
       final password = _passwordController.text.trim();
 
       if (email.isEmpty || password.isEmpty) {
-        context.showSnackBar('Please enter both email and password',
-            isError: true);
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Please enter both email and password')));
         setState(() => _isLoading = false);
         return;
       }
 
-      debugPrint('🔍 Attempting login for: $email');
-
       Map<String, dynamic>? employee;
-      bool isSupabaseAuth = false;
+
+      debugPrint('🔍 Attempting login for: $email');
 
       // ✅ Step 1: Check Database directly for matching email and password
       try {
-        final List<dynamic> dbResponse = await supabase
+        final List<dynamic> dbResponse = await Supabase.instance.client
             .from(Tables.employee)
-            .select(
-                'emp_id, first_name, last_name, email, designation, image_url, Employee_status')
+            .select('emp_id, first_name, last_name, email, designation, image_url, Employee_status')
             .eq('email', email)
             .eq('password', password)
             .limit(1);
@@ -55,38 +53,33 @@ class _LoginPageState extends State<LoginPage> {
 
           // Try to sign in with Supabase Auth silently (don't block if it fails)
           try {
-            await supabase.auth.signInWithPassword(
+            await Supabase.instance.client.auth.signInWithPassword(
               email: email,
               password: password,
             );
-            isSupabaseAuth = true;
           } catch (_) {
-            debugPrint('⚠️ Supabase Auth failed, but DB credentials matched.');
+            debugPrint('⚠️ Supabase Auth failed silently.');
           }
         }
       } catch (e) {
         debugPrint('⚠️ Database direct auth login attempt issue: $e');
       }
 
-      // ✅ Step 2: Fallback to Supabase Auth if DB match failed
+      // ✅ Step 2: Fallback to Supabase Auth if DB match failed (Optional)
       if (employee == null) {
         try {
-          final authResponse = await supabase.auth.signInWithPassword(
+          final authResponse = await Supabase.instance.client.auth.signInWithPassword(
             email: email,
             password: password,
           );
 
           final user = authResponse.user;
           if (user != null) {
-            isSupabaseAuth = true;
-            debugPrint(
-                '✅ Logged in via Supabase Auth as ${user.email}, UID: ${user.id}');
+            debugPrint('✅ Logged in via Supabase Auth as ${user.email}');
 
-            // Fetch corresponding employee record with limit(1) to avoid multiple rows crash
-            final List<dynamic> empResponse = await supabase
+            final List<dynamic> empResponse = await Supabase.instance.client
                 .from(Tables.employee)
-                .select(
-                    'emp_id, first_name, last_name, email, designation, image_url, Employee_status')
+                .select('emp_id, first_name, last_name, email, designation, image_url, Employee_status')
                 .eq('email', user.email ?? email)
                 .limit(1);
 
@@ -95,25 +88,31 @@ class _LoginPageState extends State<LoginPage> {
             }
           }
         } catch (e) {
-          debugPrint('⚠️ Supabase Auth exception: $e');
+          debugPrint('⚠️ Supabase Auth fallback failed: $e');
         }
       }
 
       if (employee == null) {
         if (mounted) {
-          context.showSnackBar(
-              'Invalid credentials or employee profile not found.',
-              isError: true);
-        }
-        if (isSupabaseAuth) {
-          await supabase.auth.signOut();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Invalid email or password.')),
+          );
         }
         setState(() => _isLoading = false);
         return;
       }
 
+      // ✅ Ensure emp_id is linked to auth.uid() for RLS
+      try {
+        final empId = await SessionManager.getOrCreateEmployeeLink();
+        print("Logged in employee id: $empId");
+      } catch (e) {
+        debugPrint('⚠️ RLS link error: $e');
+      }
+
       // ✅ Step 3: Save employee session locally
       await SessionManager.saveSession(employee);
+      debugPrint('💾 Session saved for employee: ${employee['email']}');
 
       // ✅ Step 4: Initialize shift offer system
       try {
@@ -125,7 +124,9 @@ class _LoginPageState extends State<LoginPage> {
 
       // ✅ Step 5: Navigate to dashboard
       if (mounted) {
-        context.showSnackBar('✅ Login successful');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('✅ Login successful')),
+        );
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const DashboardPage()),
         );
@@ -134,7 +135,9 @@ class _LoginPageState extends State<LoginPage> {
       debugPrint('❌ Login error: $error');
       debugPrint(stack.toString());
       if (mounted) {
-        context.showSnackBar('Login failed: $error', isError: true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Login failed: $error')),
+        );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);

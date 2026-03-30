@@ -82,6 +82,7 @@ class _InjuryReportFormState extends State<InjuryReportForm> {
   }
 
   Future<void> _submitForm() async {
+    print("SUBMITTING INJURY PAGE SESSION: ${Supabase.instance.client.auth.currentSession}");
     if (!_formKey.currentState!.validate()) return;
 
     if (_selectedDate == null) {
@@ -105,8 +106,7 @@ class _InjuryReportFormState extends State<InjuryReportForm> {
     setState(() => _isSubmitting = true);
 
     try {
-      final empId = await SessionManager.getEmpId();
-      if (empId == null) {
+      if (SessionManager.empId == null) {
         if (mounted) {
           context.showSnackBar('You must be logged in to submit a report.',
               isError: true);
@@ -126,6 +126,12 @@ class _InjuryReportFormState extends State<InjuryReportForm> {
       }
       _uploadedSignatureUrl = uploadedUrl;
 
+      // Debug session info before insert
+      print("CURRENT USER: ${supabase.auth.currentUser}");
+      print("CURRENT SESSION: ${supabase.auth.currentSession}");
+      print("SESSION USER ID: ${supabase.auth.currentUser?.id}");
+      print("EMP ID BEING SENT: ${SessionManager.empId}");
+
       final data = {
         'date': DateFormat('yyyy-MM-dd').format(_selectedDate!),
         'injured_person': _injuredPersonController.text.trim(),
@@ -134,13 +140,17 @@ class _InjuryReportFormState extends State<InjuryReportForm> {
         'description': _descriptionController.text.trim(),
         'severity': _selectedSeverity,
         'status': _selectedStatus,
-        'emp_id': empId, // ✅ Employee ID from session (matches bigint in table)
-        'signature_url': _uploadedSignatureUrl, // ✅ Signature URL from storage
+        'emp_id': SessionManager.empId,
+        'signature_url': _uploadedSignatureUrl,
+        'reporter_name': _reportingEmployeeController.text.trim(),
+        'created_at': DateTime.now().toIso8601String(),
       };
 
-      // ✅ Insert into Supabase
-      // Note: Supabase insert() throws exceptions on error, doesn't return error object
-      await supabase.from('injury_reports').insert(data);
+      // ✅ Insert into Supabase with .select()
+      final response = await supabase.from('injury_reports').insert(data).select();
+      
+      print("🚀 Injury Insert Result: $response");
+      debugPrint('✅ Injury report successfully inserted into Supabase');
 
       // ✅ Email notification
       final emailSent = await EmailService.sendInjuryReport(

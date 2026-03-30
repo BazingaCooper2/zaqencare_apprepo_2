@@ -184,7 +184,12 @@ class _ChatbotModalState extends State<ChatbotModal> {
   }
 
   Future<void> _sendMessageWithSignature(
-      String message, String signatureUrl) async {
+      String message, String signatureUrl, {
+        String? leaveStartDate,
+        String? leaveEndDate,
+        String? startTime,
+        String? endTime,
+      }) async {
     if (message.trim().isEmpty || _isLoading) return;
 
     // Add user message
@@ -208,6 +213,10 @@ class _ChatbotModalState extends State<ChatbotModal> {
       message,
       empId,
       signatureUrl,
+      leaveStartDate: leaveStartDate,
+      leaveEndDate: leaveEndDate,
+      startTime: startTime,
+      endTime: endTime,
     );
 
     // Add bot response
@@ -264,6 +273,10 @@ class _ChatbotModalState extends State<ChatbotModal> {
       penColor: Colors.black,
       exportBackgroundColor: Colors.white,
     );
+    DateTime fromDate = DateTime.now();
+    DateTime toDate = DateTime.now();
+    TimeOfDay startTime = const TimeOfDay(hour: 9, minute: 0);
+    TimeOfDay endTime = const TimeOfDay(hour: 17, minute: 0);
     Uint8List? signatureImage;
     bool isSubmitting = false;
 
@@ -279,8 +292,178 @@ class _ChatbotModalState extends State<ChatbotModal> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text('Please provide a reason for calling in sick:'),
+                  const Text('Select Leave Duration:',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: InkWell(
+                          onTap: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: fromDate,
+                              firstDate: DateTime.now()
+                                  .subtract(const Duration(days: 30)),
+                              lastDate:
+                                  DateTime.now().add(const Duration(days: 365)),
+                            );
+                            if (picked != null) {
+                              setDialogState(() {
+                                fromDate = picked;
+                                if (toDate.isBefore(fromDate)) {
+                                  toDate = fromDate;
+                                }
+                              });
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey.shade400),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('From Date',
+                                    style: TextStyle(
+                                        fontSize: 12, color: Colors.grey)),
+                                const SizedBox(height: 4),
+                                Text(
+                                  "${fromDate.year}-${fromDate.month.toString().padLeft(2, '0')}-${fromDate.day.toString().padLeft(2, '0')}",
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w500),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: InkWell(
+                          onTap: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: toDate,
+                              firstDate: fromDate,
+                              lastDate:
+                                  DateTime.now().add(const Duration(days: 365)),
+                            );
+                            if (picked != null) {
+                              setDialogState(() {
+                                toDate = picked;
+                              });
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey.shade400),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('To Date',
+                                    style: TextStyle(
+                                        fontSize: 12, color: Colors.grey)),
+                                const SizedBox(height: 4),
+                                Text(
+                                  "${toDate.year}-${toDate.month.toString().padLeft(2, '0')}-${toDate.day.toString().padLeft(2, '0')}",
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w500),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: InkWell(
+                          onTap: () async {
+                            final picked = await showTimePicker(
+                              context: context,
+                              initialTime: startTime,
+                            );
+                            if (picked != null) {
+                              setDialogState(() {
+                                startTime = picked;
+                              });
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey.shade400),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Start Time',
+                                    style: TextStyle(
+                                        fontSize: 12, color: Colors.grey)),
+                                const SizedBox(height: 4),
+                                Text(
+                                  "${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}",
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w500),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: InkWell(
+                          onTap: () async {
+                            final picked = await showTimePicker(
+                              context: context,
+                              initialTime: endTime,
+                            );
+                            if (picked != null) {
+                              setDialogState(() {
+                                endTime = picked;
+                              });
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey.shade400),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('End Time',
+                                    style: TextStyle(
+                                        fontSize: 12, color: Colors.grey)),
+                                const SizedBox(height: 4),
+                                Text(
+                                  "${endTime.hour.toString().padLeft(2, '0')}:${endTime.minute.toString().padLeft(2, '0')}",
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w500),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 16),
+                  const Text('Please provide a reason for calling in sick:',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
                   TextField(
                     controller: reasonController,
                     decoration: const InputDecoration(
@@ -291,7 +474,8 @@ class _ChatbotModalState extends State<ChatbotModal> {
                     maxLines: 3,
                   ),
                   const SizedBox(height: 16),
-                  const Text('Please provide your signature:'),
+                  const Text('Please provide your signature:',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   Container(
                     width: double.infinity,
@@ -499,10 +683,23 @@ class _ChatbotModalState extends State<ChatbotModal> {
                         }
                         signatureController.dispose();
 
-                        // Send message with reason and signature URL
+                        // Send message with reason, signature URL, and dates
+                        final fromStr =
+                            "${fromDate.year}-${fromDate.month.toString().padLeft(2, '0')}-${fromDate.day.toString().padLeft(2, '0')}";
+                        final toStr =
+                            "${toDate.year}-${toDate.month.toString().padLeft(2, '0')}-${toDate.day.toString().padLeft(2, '0')}";
+                        final startStr =
+                            "${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}:00";
+                        final endStr =
+                            "${endTime.hour.toString().padLeft(2, '0')}:${endTime.minute.toString().padLeft(2, '0')}:00";
+
                         await _sendMessageWithSignature(
-                          'I need to call in sick today. Reason: $reason',
+                          'I need to call in sick from $fromStr $startStr to $toStr $endStr. Reason: $reason',
                           publicUrl,
+                          leaveStartDate: fromStr,
+                          leaveEndDate: toStr,
+                          startTime: startStr,
+                          endTime: endStr,
                         );
                       } catch (e) {
                         debugPrint('Error in call in sick: $e');
@@ -641,117 +838,101 @@ class _ChatbotModalState extends State<ChatbotModal> {
     );
   }
 
-  Future<Map<String, dynamic>?> _fetchCurrentShift() async {
+  Future<List<Shift>> _fetchTodayShifts() async {
     try {
       final empId = await SessionManager.getEmpId();
-      debugPrint('Fetching current shift for Emp ID: $empId');
-
-      if (empId == null) {
-        debugPrint('Emp ID is null');
-        return null;
-      }
+      if (empId == null) return [];
 
       final supabase = Supabase.instance.client;
-
-      // 1. Try RPC first
-      try {
-        final response =
-            await supabase.rpc('get_active_shift', params: {'p_emp_id': empId});
-
-        debugPrint('get_active_shift response: $response');
-
-        if (response != null) {
-          Map<String, dynamic>? shiftData;
-          if (response is List) {
-            if (response.isNotEmpty) {
-              shiftData = Map<String, dynamic>.from(response.first as Map);
-            }
-          } else if (response is Map) {
-            shiftData = Map<String, dynamic>.from(response);
-          }
-
-          if (shiftData != null) {
-            return await _ensureClientDetails(shiftData);
-          }
-        }
-      } catch (e) {
-        debugPrint('RPC get_active_shift failed: $e');
-      }
-
-      // 2. Fallback: Manual Date/Time check for "Scheduled" shifts that might be blocked by strict RPC logic
       final now = DateTime.now();
       final todayStr =
           "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
-      debugPrint(
-          'Fallback: Checking scheduled shifts for today (EmpID: $empId, Date: $todayStr)...');
 
-      try {
-        final fallbackResponse = await supabase
-            .from('shift')
-            .select('''
-            shift_id,
-            emp_id,
-            client_id,
-            shift_status,
-            shift_start_time,
-            shift_end_time,
-            start_ts,
-            clock_in,
-            clock_out,
-            date,
-            shift_type,
-            task_id
-          ''')
-            .eq('emp_id', empId)
-            .eq('date', todayStr)
-            .inFilter('shift_status',
-                ['scheduled', 'Scheduled', 'in_progress', 'In Progress']);
+      final response = await supabase
+          .from('shift')
+          .select('*')
+          .eq('emp_id', empId)
+          .eq('date', todayStr)
+          .inFilter('shift_status', [
+        'scheduled',
+        'Scheduled',
+        'in_progress',
+        'In Progress',
+        'clocked_in',
+        'Clocked in'
+      ]).order('shift_start_time', ascending: true);
 
-        debugPrint('Fallback response: $fallbackResponse');
-
-        if ((fallbackResponse as List).isNotEmpty) {
-          debugPrint(
-              'Fallback found ${fallbackResponse.length} possible shifts today');
-
-          dynamic bestMatchMap;
-          int maxScore = 0;
-
-          // Find the most relevant shift (Currently active > Starting soon > Just ended)
-          for (var s in fallbackResponse) {
-            final shiftMap = s;
-            final shiftObj = Shift.fromJson(shiftMap);
-            final score = shiftObj.shiftTimeScore;
-
-            if (score > maxScore) {
-              maxScore = score;
-              bestMatchMap = shiftMap;
-              if (maxScore == 3) break; // Found an active one, can't get better
-            }
-          }
-
-          if (bestMatchMap != null) {
-            debugPrint(
-                'Found best matching shift in fallback: ${bestMatchMap['shift_id']} (Score: $maxScore)');
-            return await _ensureClientDetails(bestMatchMap);
-          }
-
-          // 2. If no shift is strictly active, but we have shifts for today,
-          // pick the first shift from today.
-          debugPrint(
-              'No strictly active shift found. Picking the first shift from today.');
-          final shift = fallbackResponse.first;
-          return await _ensureClientDetails(shift);
-        }
-      } catch (e) {
-        debugPrint('Fallback query failed: $e');
+      final shifts = <Shift>[];
+      for (var s in (response as List)) {
+        final shiftData = Map<String, dynamic>.from(s);
+        final updatedShiftData = await _ensureClientDetails(shiftData);
+        shifts.add(Shift.fromJson(updatedShiftData));
       }
-
-      return null;
+      return shifts;
     } catch (e) {
-      debugPrint('Error fetching current shift: $e');
-      return null;
+      debugPrint('Error fetching today\'s shifts: $e');
+      return [];
     }
   }
+
+  Future<Shift?> _showShiftSelectionDialog(List<Shift> shifts) async {
+    Shift? selectedShift = shifts.first;
+
+    return await showDialog<Shift>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Select Shift'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('Please select the shift timings:'),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey.shade400),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<Shift>(
+                    isExpanded: true,
+                    value: selectedShift,
+                    items: shifts.map((shift) {
+                      return DropdownMenuItem<Shift>(
+                        value: shift,
+                        child: Text(
+                           shift.formattedTimeRange,
+                          style: const TextStyle(fontWeight: FontWeight.w500),
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        selectedShift = value;
+                      });
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(selectedShift),
+              child: const Text('Next'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
 
   Future<Map<String, dynamic>> _ensureClientDetails(
       Map<String, dynamic> shiftData) async {
@@ -815,6 +996,7 @@ class _ChatbotModalState extends State<ChatbotModal> {
     }
     return shiftData;
   }
+
 
   Future<void> _submitShiftChangeRequest({
     required String requestType,
@@ -972,24 +1154,15 @@ class _ChatbotModalState extends State<ChatbotModal> {
   }
 
   void _showClientBookingEndedEarlyDialog() async {
-    // Show loading indicator first
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
-    );
+    setState(() => _isLoading = true);
+    final shifts = await _fetchTodayShifts();
+    setState(() => _isLoading = false);
 
-    final shiftData = await _fetchCurrentShift();
-
-    if (mounted) {
-      Navigator.of(context).pop(); // Dismiss loading
-    }
-
-    if (shiftData == null) {
+    if (shifts.isEmpty) {
       if (mounted) {
         setState(() {
           _messages.add(ChatMessage(
-            text: 'No shift is live/assigned',
+            text: 'No shifts scheduled for today',
             isBot: true,
             timestamp: DateTime.now(),
           ));
@@ -1000,9 +1173,10 @@ class _ChatbotModalState extends State<ChatbotModal> {
       return;
     }
 
-    final shift = Shift.fromJson(shiftData);
-    if (mounted) {
-      _showEndShiftConfirmationDialog(shift);
+    Shift? selectedShift = await _showShiftSelectionDialog(shifts);
+
+    if (selectedShift != null && mounted) {
+      _showEndShiftConfirmationDialog(selectedShift);
     }
   }
 
@@ -1266,14 +1440,14 @@ class _ChatbotModalState extends State<ChatbotModal> {
 
   Future<void> _showClientIssueConfirmationDialog(String issueType) async {
     setState(() => _isLoading = true);
-    final shiftMap = await _fetchCurrentShift();
+    final shifts = await _fetchTodayShifts();
     setState(() => _isLoading = false);
 
-    if (shiftMap == null) {
+    if (shifts.isEmpty) {
       if (mounted) {
         setState(() {
           _messages.add(ChatMessage(
-            text: 'No shift is live/assigned',
+            text: 'No shifts scheduled for today',
             isBot: true,
             timestamp: DateTime.now(),
           ));
@@ -1284,7 +1458,11 @@ class _ChatbotModalState extends State<ChatbotModal> {
       return;
     }
 
-    final shiftObj = Shift.fromJson(shiftMap);
+    Shift? selectedShift = await _showShiftSelectionDialog(shifts);
+
+    if (selectedShift == null || !mounted) return;
+
+    final shiftObj = selectedShift;
     if (!mounted) return;
 
     final signatureController = SignatureController(
@@ -1420,10 +1598,12 @@ class _ChatbotModalState extends State<ChatbotModal> {
                       if (signature == null) return;
 
                       String requestTypeCode = 'other';
-                      if (issueType == 'Client not home')
+                      if (issueType == 'Client not home') {
                         requestTypeCode = 'client_not_home';
-                      if (issueType == 'Client cancelled')
+                      }
+                      if (issueType == 'Client cancelled') {
                         requestTypeCode = 'client_cancelled';
+                      }
 
                       _submitShiftChangeRequest(
                         requestType: requestTypeCode,

@@ -52,6 +52,8 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
   Shift? _activeShift;
   Client? _activeClient;
   bool _loadingActiveShift = false;
+  List<Shift> _todayShifts = []; // New list for today's shifts
+
   // Geocoded coordinates for the active client's address.
   // client_final has no lat/lng column — coords are fetched via backend.
   List<double>? _geocodedClientLatLng; // [lat, lng]
@@ -59,11 +61,18 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
   // Task state
   List<Task> _tasks = [];
   bool _loadingTasks = false;
-  bool _updatingTasks = false; // Track if update is in progress
+  StreamSubscription? _tasksRealtimeSubscription;
+  StreamSubscription?
+      _shiftRealtimeSubscription; // Added to prevent memory leak
+
+  // Manual clock in/out state
+  bool _manualClockingIn = false;
+  bool _manualClockingOut = false;
 
   // Route state
   String? _routeDistance;
   String? _routeDuration;
+  int? _subscribedShiftId; // NEW: To prevent redundant streams loop
 
   // Assisted-Living locations with 50m geofence
   static const Map<String, LatLng> _locations = {
@@ -100,51 +109,69 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
       final empId = await SessionManager.getEmpId();
       if (empId == null) return;
 
-      // Check DB for any row where clock_out_time is NULL
-      final response = await supabase
-          .from('time_logs')
+      // 1. Direct Query on 'shift' table (User's specific request for session restoration)
+      // This ensures we find the active shift even if it started on a different day.
+      final activeShiftData = await supabase
+          .from('shift')
           .select('*')
           .eq('emp_id', empId)
-          .filter('clock_out_time', 'is', null)
+          .not('clock_in', 'is', null)
+          .filter('clock_out', 'is', null)
+          .order('clock_in', ascending: false)
+          .limit(1)
           .maybeSingle();
 
-      if (response != null && mounted) {
-        final log = response;
-        final lat = (log['clock_in_latitude'] as num).toDouble();
-        final lng = (log['clock_in_longitude'] as num).toDouble();
+      if (activeShiftData != null && mounted) {
+        final shift = Shift.fromJson(activeShiftData);
 
-        // Try to match which location we are at based on stored coordinates
-        String? matchedPlace;
-        for (final entry in _locations.entries) {
-          final loc = entry.value;
-          final dist =
-              _calculateDistance(lat, lng, loc.latitude, loc.longitude);
-
-          // If the stored clock-in location corresponds to one of our geofences
-          // (allowing a relaxed buffer since we might have clocked in at the edge)
-          if (dist <= _geofenceRadius + 50) {
-            matchedPlace = entry.key;
-            break;
-          }
-        }
-
-        // Manual Shift Restore removed as RPC handles it now.
+        // 2. Find corresponding time_log to restore _currentLogId for clock-out
+        final logResponse = await supabase
+            .from('time_logs')
+            .select('id, clock_in_time')
+            .eq('emp_id', empId)
+            .eq('shift_id', shift.shiftId)
+            .filter('clock_out_time', 'is', null)
+            .maybeSingle();
 
         setState(() {
+          _activeShift = shift;
           _isClockedIn = true;
-          _currentPlaceName = matchedPlace;
-          _currentLogId = log['id'].toString();
-          _clockInTimeUtc = DateTime.parse(log['clock_in_time']);
+          _clockInTimeUtc = shift.clockIn;
+          if (logResponse != null) {
+            _currentLogId = logResponse['id'].toString();
+            _clockInTimeUtc = DateTime.parse(logResponse['clock_in_time']);
+          }
         });
 
-        if (matchedPlace != null) {
-          print('🔄 Restored active session at $matchedPlace');
-        } else {
-          debugPrint('⚠️ Restored active session but location unknown.');
+        await _loadClientAndTasksForActiveShift();
+        _currentPlaceName = _activeClient?.fullName ?? 'Work Location';
+        debugPrint('Restored active shift ${shift.shiftId} (Log: $_currentLogId)');
+      } else {
+        // Fallback: Check time_logs if shift table didn't have the explicit clock_in/out
+        final response = await supabase
+            .from('time_logs')
+            .select('*, shift(*)')
+            .eq('emp_id', empId)
+            .filter('clock_out_time', 'is', null)
+            .maybeSingle();
+
+        if (response != null && mounted) {
+          final log = response;
+          setState(() {
+            _isClockedIn = true;
+            _currentLogId = log['id'].toString();
+            _clockInTimeUtc = DateTime.parse(log['clock_in_time']);
+            if (log['shift'] != null) {
+              _activeShift = Shift.fromJson(log['shift']);
+            }
+          });
+          await _loadClientAndTasksForActiveShift();
+          _currentPlaceName = _activeClient?.fullName ?? 'Work Location';
+          debugPrint('Restored session via time_logs: ${_activeShift?.shiftId}');
         }
       }
     } catch (e) {
-      debugPrint('Error checking active session: $e');
+      debugPrint('Restore session error: $e');
     }
   }
 
@@ -152,186 +179,275 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
   void dispose() {
     _locationTimer?.cancel();
     _positionSubscription?.cancel();
+    _tasksRealtimeSubscription?.cancel();
+    _shiftRealtimeSubscription?.cancel();
     _mapController?.dispose();
     super.dispose();
   }
 
-  Future<Shift?> fetchActiveShift(int empId) async {
-    debugPrint('🚨 Fetching ACTIVE SHIFT via RPC for emp_id=$empId');
+  Future<List<Shift>> fetchTodayShifts(int empId) async {
+    debugPrint('🚨 Fetching shifts for emp_id=$empId');
     try {
-      // 1. Try RPC first (Primary logic)
-      final response =
-          await supabase.rpc('get_active_shift', params: {'p_emp_id': empId});
+      final now = DateTime.now(); // local time
+      final today = DateTime(now.year, now.month, now.day); // local midnight
 
-      debugPrint('📥 RPC Raw Response: $response');
+      // Query a ±1 day window around today so we catch shifts regardless of
+      // whether Supabase stores the date column in UTC or local time.
+      // We then re-filter in Dart using the device's local date.
+      final windowStart = today.subtract(const Duration(days: 1));
+      final windowEnd = today.add(const Duration(days: 2));
+      final windowStartStr =
+          '${windowStart.year}-${windowStart.month.toString().padLeft(2, '0')}-${windowStart.day.toString().padLeft(2, '0')}';
+      final windowEndStr =
+          '${windowEnd.year}-${windowEnd.month.toString().padLeft(2, '0')}-${windowEnd.day.toString().padLeft(2, '0')}';
 
-      if (response != null && response is List && response.isNotEmpty) {
-        debugPrint('✅ RPC returned ${response.length} shift(s)');
-        return Shift.fromJson(response.first);
-      } else if (response is Map) {
-        debugPrint('✅ RPC returned a single shift map');
-        return Shift.fromJson(response as Map<String, dynamic>);
-      }
+      // Include every status variant — we'll narrow in Dart afterward.
+      const statuses = [
+        'scheduled',
+        'Scheduled',
+        'clocked_in',
+        'Clocked in',
+        'Clocked In',
+        'active',
+        'Active',
+        'in_progress',
+        'In Progress',
+        'clocked_out',
+        'Clocked out',
+        'Clocked Out',
+      ];
 
-      // 2. Fallback: Manual check for scheduled shifts today
-      debugPrint(
-          '⚠️ RPC returned empty/null. Fallback: Checking for today\'s scheduled shifts...');
-      final now = DateTime.now();
-      final todayStr =
-          "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
-
-      debugPrint('📅 Querying shifts for emp_id=$empId, date=$todayStr');
-
-      final fallbackResponse = await supabase
+      final response = await supabase
           .from('shift')
           .select('*')
           .eq('emp_id', empId)
-          .eq('date', todayStr)
-          .inFilter('shift_status', [
-        'scheduled',
-        'Scheduled',
-        'in_progress',
-        'In Progress'
-      ]).order('shift_start_time', ascending: true);
+          .gte('date', windowStartStr)
+          .lt('date', windowEndStr)
+          .inFilter('shift_status', statuses)
+          .order('shift_start_time', ascending: true);
 
       debugPrint(
-          '📥 Fallback query returned ${(fallbackResponse as List).length} shift(s)');
+          '📅 Raw DB result: ${response.length} shift(s) in [$windowStartStr, $windowEndStr)');
 
-      if ((fallbackResponse as List).isNotEmpty) {
-        // Log all found shifts
-        for (int i = 0; i < (fallbackResponse as List).length; i++) {
-          final s = fallbackResponse[i];
-          debugPrint(
-              '  Shift[$i]: id=${s['shift_id']}, client_id=${s['client_id']}, '
-              'status=${s['shift_status']}, date=${s['date']}, '
-              'time=${s['shift_start_time']}-${s['shift_end_time']}, '
-              'task_id=${s['task_id']}');
-        }
+      // Filter in Dart using local date so timezone differences don't matter.
+      final todayShifts = response
+          .where((s) {
+            final dateStr = s['date']?.toString() ?? '';
+            if (dateStr.isEmpty) return false;
+            try {
+              // SAFE PARSING: Use local date string split to avoid UTC/Local timezone offsets.
+              // This ensures "2026-03-28" is always Mar 28 regardless of device location.
+              final parts = dateStr.split('-');
+              if (parts.length != 3) return false;
+              final y = int.parse(parts[0]);
+              final m = int.parse(parts[1]);
+              final d = int.parse(parts[2]);
+              final shiftDay = DateTime(y, m, d);
+              return shiftDay == today;
+            } catch (_) {
+              return false;
+            }
+          })
+          .map((s) => Shift.fromJson(s))
+          .toList();
 
-        final shifts = (fallbackResponse as List)
-            .map((s) => Shift.fromJson(s as Map<String, dynamic>))
-            .toList();
-
-        Shift? bestMatch;
-        int maxScore = 0;
-
-        // Find the most relevant shift (Currently active > Starting soon > Just ended)
-        for (final shift in shifts) {
-          final score = shift.shiftTimeScore;
-          debugPrint('  Shift ${shift.shiftId} score=$score');
-          if (score > maxScore) {
-            maxScore = score;
-            bestMatch = shift;
-            if (maxScore == 3) break; // Found an active one, can't get better
-          }
-        }
-
-        if (bestMatch != null) {
-          debugPrint(
-              '✅ Found best matching scheduled shift for today: ${bestMatch.shiftId} (Score: $maxScore)');
-          return bestMatch;
-        }
-
-        // If none strictly match the time window, fallback to the first shift of the day
-        debugPrint(
-            '⚠️ No currently active shift found today. Defaulting to first scheduled shift: ${shifts.first.shiftId}');
-        return shifts.first;
-      }
-
-      debugPrint('❌ No shifts found for emp_id=$empId on $todayStr');
-      return null;
+      debugPrint(
+          '✅ After local-date filter: ${todayShifts.length} shift(s) for today (${today.toLocal()})');
+      return todayShifts;
     } catch (e) {
-      debugPrint('❌ Error fetching active shift: $e');
-      return null;
+      debugPrint('❌ Error fetching today shifts: $e');
+      return [];
     }
   }
 
   Future<void> _loadActiveShift() async {
+    if (_loadingActiveShift) return;
+
     setState(() {
       _loadingActiveShift = true;
     });
 
     try {
       final empId = await SessionManager.getEmpId();
-      debugPrint('🔑 SessionManager emp_id = $empId');
-
       if (empId == null) {
-        debugPrint('❌ emp_id is null! User may not be logged in.');
         setState(() {
           _loadingActiveShift = false;
         });
         return;
       }
 
-      final shift = await fetchActiveShift(empId);
-
-      if (shift != null) {
+      // 1. Fetch active shift via RPC first (in case clocked in to an older shift).
+      //    Wrapped in its own try/catch so an RPC failure NEVER blocks
+      //    fetchTodayShifts from running below.
+      Shift? activeRpcShift;
+      try {
+        final rpcResponse =
+            await supabase.rpc('get_active_shift', params: {'p_emp_id': empId});
+        if (rpcResponse != null &&
+            rpcResponse is List &&
+            rpcResponse.isNotEmpty) {
+          activeRpcShift = Shift.fromJson(rpcResponse.first);
+        } else if (rpcResponse is Map) {
+          activeRpcShift = Shift.fromJson(rpcResponse as Map<String, dynamic>);
+        }
         debugPrint(
-            '✅ Active shift found: id=${shift.shiftId}, client_id=${shift.clientId}, task_id=${shift.taskId}');
+            '🔥 RPC get_active_shift returned: ${activeRpcShift?.shiftId}');
+      } catch (rpcErr) {
+        debugPrint('⚠️ get_active_shift RPC failed (non-fatal): $rpcErr');
+        // Continue — fetchTodayShifts below will still run.
+      }
 
-        // Priority 1: Use nested client if available
-        Client? client = shift.client;
+      // 2. Always fetch today's shifts regardless of RPC result
+      final todayShifts = await fetchTodayShifts(empId);
+      debugPrint(
+          '📊 _loadActiveShift: todayShifts=${todayShifts.length}, rpcShift=${activeRpcShift?.shiftId}');
 
-        // Priority 2: Manual fetch if nested data missing
-        if (client == null && shift.clientId != null) {
-          debugPrint(
-              '🔍 Fetching client data for client_id=${shift.clientId}...');
-          final clientResponse = await supabase
-              .from(Tables.client)
-              .select('*')
-              .eq('id', shift.clientId!)
-              .limit(1);
-
-          if (clientResponse.isNotEmpty) {
-            client = Client.fromJson(clientResponse.first);
-            debugPrint('✅ Client loaded: ${client.fullName}');
-          } else {
-            debugPrint('⚠️ No client found for client_id=${shift.clientId}');
-          }
+      Shift? currentlyClockedInShift;
+      if (activeRpcShift != null) {
+        final st =
+            activeRpcShift.shiftStatus?.toLowerCase().replaceAll(' ', '_');
+        if (st == 'clocked_in' || st == 'active' || st == 'in_progress') {
+          currentlyClockedInShift = activeRpcShift;
         }
+      }
 
-        // Geocode the client address
-        if (client != null && client.fullAddress.isNotEmpty) {
-          final coords = await _fetchCoordinatesFromBackend(client.fullAddress);
-          if (coords != null) {
-            final lat = (coords['latitude'] as num).toDouble();
-            final lng = (coords['longitude'] as num).toDouble();
-            setState(() {
-              _geocodedClientLatLng = [lat, lng];
-            });
-            debugPrint('✅ Geocoded ${client.fullAddress} → $lat,$lng');
-          }
-        }
+      if (currentlyClockedInShift == null) {
+        currentlyClockedInShift = todayShifts.where((s) {
+          final st = s.shiftStatus?.toLowerCase().replaceAll(' ', '_');
+          return st == 'clocked_in' || st == 'active' || st == 'in_progress';
+        }).firstOrNull;
+      }
 
-        setState(() {
-          _activeShift = shift;
-          _activeClient = client;
-          _loadingActiveShift = false;
-          _setupMapMarkersAndCircles(); // Refresh markers/geofences
-        });
-
-        debugPrint(
-            '✅ Loaded shift ${shift.shiftId} for client_id ${shift.clientId}');
-        debugPrint('✅ Client loaded: ${client?.fullName ?? "No client"}');
-        debugPrint('✅ Client address: ${client?.fullAddress ?? "No address"}');
-
-        // Update route if we have both current position and client location
-        if (_currentPosition != null && client != null) {
-          _updateRouteToClient();
-        }
-
-        // Load tasks for this shift
-        _loadTasks();
+      if (currentlyClockedInShift != null) {
+        _todayShifts = [currentlyClockedInShift];
+        _activeShift = currentlyClockedInShift;
+        _isClockedIn = true;
       } else {
-        debugPrint('⚠️ No active shifts found');
-        setState(() {
-          _activeShift = null;
-          _activeClient = null;
-          _loadingActiveShift = false;
+        // If we found an active log session earlier but shift status hasn't updated yet,
+        // we should still treat the current today's shift as the active one.
+        _todayShifts = todayShifts.where((s) {
+          final st = s.shiftStatus?.toLowerCase().replaceAll(' ', '_');
+          return st == 'scheduled';
+        }).toList();
+
+        if (_todayShifts.isNotEmpty) {
+          // Try to keep currently selected active shift if it's still in the list
+          if (_activeShift != null &&
+              _todayShifts.any((s) => s.shiftId == _activeShift!.shiftId)) {
+            _activeShift = _todayShifts
+                .firstWhere((s) => s.shiftId == _activeShift!.shiftId);
+          } else {
+            _activeShift = _todayShifts.first;
+          }
+
+          // CRITICAL: If _checkActiveClockInStatus found we are clocked in,
+          // force _isClockedIn to stay true for this shift.
+          if (_isClockedIn) {
+            debugPrint(
+                '🔗 Linking active session log to today\'s shift: ${_activeShift!.shiftId}');
+          }
+        } else {
+          // No scheduled shifts today - if clocked in but no shift record found for today
+          // we keep _activeShift as null or keep whatever we have.
+          if (!_isClockedIn) _activeShift = null;
+        }
+      }
+
+      await _loadClientAndTasksForActiveShift();
+    } catch (e) {
+      debugPrint('❌ Error loading shifts: $e');
+      setState(() {
+        _loadingActiveShift = false;
+      });
+    }
+  }
+
+  Future<void> _loadClientAndTasksForActiveShift() async {
+    final shift = _activeShift;
+    if (shift == null) {
+      setState(() {
+        _activeClient = null;
+        _loadingActiveShift = false;
+      });
+      return;
+    }
+
+    try {
+      Client? client = shift.client;
+      if (client == null && shift.clientId != null) {
+        final clientResponse = await supabase
+            .from(Tables.client)
+            .select('*')
+            .eq('id', shift.clientId!)
+            .limit(1);
+        if (clientResponse.isNotEmpty) {
+          client = Client.fromJson(clientResponse.first);
+        }
+      }
+
+      if (client != null && client.fullAddress.isNotEmpty) {
+        _fetchCoordinatesFromBackend(client.fullAddress).then((coords) {
+          if (coords != null && mounted) {
+            setState(() {
+              _geocodedClientLatLng = [
+                (coords['latitude'] as num).toDouble(),
+                (coords['longitude'] as num).toDouble()
+              ];
+            });
+            _setupMapMarkersAndCircles();
+          }
         });
       }
+
+      setState(() {
+        _activeClient = client;
+        _loadingActiveShift = false;
+        final status = shift.shiftStatus?.toLowerCase().replaceAll(' ', '_');
+        if (status == 'clocked_in' ||
+            status == 'active' ||
+            status == 'in_progress') {
+          _isClockedIn = true;
+          if (shift.clockIn != null && _clockInTimeUtc == null) {
+            _clockInTimeUtc = shift.clockIn;
+          }
+        }
+      });
+      _setupMapMarkersAndCircles();
+
+      if (_currentPosition != null && client != null) {
+        _updateRouteToClient();
+      }
+
+      // OPTIMIZATION: Only (re)subscribe if the shift has actually changed
+      if (_subscribedShiftId != shift.shiftId) {
+        debugPrint('🔗 Initializing Realtime Subscriptions for shift ${shift.shiftId}');
+        
+        // Listen for task changes in real-time (Dynamic Task Updates)
+        _tasksRealtimeSubscription?.cancel();
+        _tasksRealtimeSubscription = supabase
+            .from('shift_task_log')
+            .stream(primaryKey: ['shift_id', 'order_index'])
+            .eq('shift_id', shift.shiftId)
+            .listen((_) => _loadTasks());
+
+        // REALTIME SHIFT UPDATES
+        _shiftRealtimeSubscription?.cancel();
+        _shiftRealtimeSubscription = supabase
+            .from('shift')
+            .stream(primaryKey: ['shift_id'])
+            .eq('shift_id', shift.shiftId)
+            .listen((data) {
+          // If we are already loading, ignore stream updates to prevent recursive loops
+          if (_loadingActiveShift) return;
+          
+          debugPrint('🔄 Shift update received from Realtime Stream for ${shift.shiftId}');
+          _loadActiveShift();
+        });
+        
+        _subscribedShiftId = shift.shiftId;
+      }
     } catch (e) {
-      debugPrint('❌ Error loading active shift: $e');
+      debugPrint('❌ Error loading active shift specifics: $e');
       setState(() {
         _loadingActiveShift = false;
       });
@@ -391,9 +507,11 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
           _currentPosition = position;
         });
 
-        // Update address if not already set
-        _currentAddress ??=
-            await _reverseGeocode(position.latitude, position.longitude);
+        // Update address in background if not already set — never block the stream
+        if (_currentAddress == null) {
+          _reverseGeocode(position.latitude, position.longitude)
+              .then((addr) => _currentAddress ??= addr);
+        }
 
         // Center camera on user location first time
         if (!_hasCenteredOnUser && _mapController != null) {
@@ -417,54 +535,7 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
         debugPrint('❌ Location stream error: $error');
       },
     );
-
-    // Also do one immediate fetch so we don't wait for the stream's first event
-    _updateLocation();
-  }
-
-  Future<void> _updateLocation() async {
-    try {
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 10),
-      );
-
-      debugPrint(
-          '📍 Location updated: ${position.latitude}, ${position.longitude} (accuracy: ${position.accuracy}m)');
-
-      if (!mounted) return;
-
-      setState(() {
-        _currentPosition = position;
-      });
-
-      // Update address if not already set
-      _currentAddress ??=
-          await _reverseGeocode(position.latitude, position.longitude);
-
-      // Center camera on user location first time
-      if (!_hasCenteredOnUser && _mapController != null) {
-        await _mapController!.animateCamera(
-          CameraUpdate.newLatLngZoom(
-            LatLng(position.latitude, position.longitude),
-            16,
-          ),
-        );
-        _hasCenteredOnUser = true;
-        debugPrint('🎯 Centered map on user location');
-      }
-
-      // Check for geofence entry at assisted living locations
-      await _checkGeofenceEntry(position);
-
-      // Update map markers
-      _updateMapMarkers();
-    } catch (e) {
-      debugPrint('❌ Location error: $e');
-      if (mounted) {
-        _showSnackBar('Location error: $e', isError: true);
-      }
-    }
+    // NOTE: No redundant _updateLocation() call here — the stream fires immediately.
   }
 
   Future<void> _checkGeofenceEntry(Position position) async {
@@ -731,35 +802,43 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
   bool _permissionDenied = false;
 
   Future<void> _autoClockIn(String placeName, Position position) async {
-    if (_permissionDenied) return; // Stop trying if we know we are blocked
+    if (_permissionDenied) return;
 
-    // 1. Check if Supabase Auth is valid
+    if (_currentLogId != null) {
+      debugPrint('⚠️ Already clocked in. Skipping duplicate clock-in.');
+      return;
+    }
+
+    if (_activeShift == null) {
+      debugPrint('❌ Cannot clock in: active shift is NULL');
+      return;
+    }
+
     if (supabase.auth.currentUser == null) {
-      _showSnackBar('⚠️ Logged out from server. Please Log Out & Log In again.',
-          isError: true);
+      _showSnackBar('Please log in again.', isError: true);
       return;
     }
 
     try {
       final nowUtc = DateTime.now().toUtc();
-      final clockInAddress =
-          await _reverseGeocode(position.latitude, position.longitude);
-
       final lat = double.parse(position.latitude.toStringAsFixed(8));
       final lng = double.parse(position.longitude.toStringAsFixed(8));
 
-      final empId = await SessionManager.getEmpId();
-      if (empId == null) {
-        _showSnackBar('Session expired. Please login again.', isError: true);
-        return;
-      }
+      String clockInAddress =
+          '${lat.toStringAsFixed(6)}, ${lng.toStringAsFixed(6)}';
 
-      debugPrint(
-          '📝 Attempting Auto-Clock In: AuthID=${supabase.auth.currentUser?.id}, EmpID=$empId');
+      try {
+        clockInAddress =
+            await _reverseGeocode(position.latitude, position.longitude)
+                .timeout(const Duration(seconds: 3));
+      } catch (_) {}
+
+      final empId = await SessionManager.getEmpId();
+      if (empId == null) return;
 
       final response = await supabase.from('time_logs').insert({
         'emp_id': empId,
-        // 'schedule_id': _activeShift?.shiftId.toString(), // schema mismatch
+        'shift_id': _activeShift?.shiftId, // VERY IMPORTANT
         'clock_in_time': nowUtc.toIso8601String(),
         'clock_in_latitude': lat,
         'clock_in_longitude': lng,
@@ -768,46 +847,30 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
       }).select('id');
 
       if (response.isNotEmpty) {
-        // Also update the shift table if we have an active shift
         if (_activeShift != null) {
-          try {
-            await supabase.from('shift').update({
-              'clock_in': nowUtc.toIso8601String(),
-              'shift_status': 'in_progress'
-            }).eq('shift_id', _activeShift!.shiftId);
-            debugPrint('✅ Updated shift table with clock_in time');
-          } catch (e) {
-            debugPrint('⚠️ Failed to update shift table clock_in: $e');
-          }
+          await supabase.from('shift').update({
+            'clock_in': nowUtc.toIso8601String(),
+            'shift_status': 'Clocked in'
+          }).eq('shift_id', _activeShift!.shiftId);
         }
 
         setState(() {
           _isClockedIn = true;
           _currentPlaceName = placeName;
-          _currentLogId = response.first['id'];
+          _currentLogId = response.first['id'].toString();
           _clockInTimeUtc = nowUtc;
         });
 
-        final localTime = DateFormat('HH:mm:ss').format(DateTime.now());
-        _showSnackBar('✅ Auto Clocked IN at $placeName ($localTime)');
+        _showSnackBar('Auto Clocked IN');
       }
     } catch (e) {
-      // Handle RLS Permission Error specifically
-      if (e.toString().contains('42501') || e.toString().contains('policy')) {
-        setState(() {
-          _permissionDenied = true;
-        });
-        _showPermissionErrorDialog();
-      }
-      // Handle Network Error
-      else if (e.toString().contains('SocketException') ||
-          e.toString().contains('host lookup')) {
-        _showSnackBar(
-            '⚠️ Internet lost. Validating entry locally... (Sync pending)',
-            isError: true);
-      } else {
-        _showSnackBar('Error clocking in: $e', isError: true);
-        debugPrint('❌ Clock-in Error: $e');
+      debugPrint('Clock-in error: $e');
+      _showSnackBar('Clock-in failed. Retrying...', isError: true);
+
+      await Future.delayed(const Duration(seconds: 5));
+
+      if (!_isClockedIn && _currentPosition != null) {
+        await _autoClockIn(placeName, _currentPosition!);
       }
     }
   }
@@ -837,17 +900,35 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
   Future<void> _autoClockOut(Position position) async {
     if (_currentLogId == null || _permissionDenied) return;
 
+    // ── TASK COMPLETION CHECK ────────────────────────────────────────────────
+    // Requirement: Don't clock out until all tasks are done or skipped.
+    if (!_allTasksCompleted) {
+      debugPrint('📍 Auto-Clock Out blocked: Tasks still pending.');
+      _showSnackBar(
+          '📍 You left the geofence but tasks are still pending. Please complete them to clock out.',
+          isError: true);
+      return;
+    }
+
     try {
       final nowUtc = DateTime.now().toUtc();
-      final clockOutAddress =
-          await _reverseGeocode(position.latitude, position.longitude);
+      final lat = double.parse(position.latitude.toStringAsFixed(8));
+      final lng = double.parse(position.longitude.toStringAsFixed(8));
+
+      // Reverse-geocode in parallel — don't block the clock-out DB write.
+      String clockOutAddress =
+          '${lat.toStringAsFixed(6)}, ${lng.toStringAsFixed(6)}';
+      try {
+        clockOutAddress =
+            await _reverseGeocode(position.latitude, position.longitude)
+                .timeout(const Duration(seconds: 3));
+      } catch (_) {
+        // Timeout or error — address stays as lat/lng fallback
+      }
 
       final totalHours = _clockInTimeUtc != null
           ? ((nowUtc.difference(_clockInTimeUtc!).inMinutes) / 60.0)
           : 0.0;
-
-      final lat = double.parse(position.latitude.toStringAsFixed(8));
-      final lng = double.parse(position.longitude.toStringAsFixed(8));
 
       final update = supabase.from('time_logs').update({
         'clock_out_time': nowUtc.toIso8601String(),
@@ -865,7 +946,7 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
         try {
           await supabase.from('shift').update({
             'clock_out': nowUtc.toIso8601String(),
-            'shift_status': 'completed'
+            'shift_status': 'Clocked out'
           }).eq('shift_id', _activeShift!.shiftId);
           debugPrint(
               '✅ Updated shift table with clock_out time and completed status');
@@ -1017,8 +1098,8 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
   }
 
   Future<void> _loadTasks() async {
-    if (_activeShift == null) {
-      debugPrint('❌ _loadTasks: _activeShift is null');
+    if (_activeShift == null || _loadingTasks) {
+      if (_activeShift == null) debugPrint('❌ _loadTasks: _activeShift is null');
       return;
     }
 
@@ -1030,124 +1111,95 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
     });
 
     try {
-      // ──────────────────────────────────────────────────────
-      // 1. PRIMARY: Parse shift.task_id comma-separated string
-      //    e.g. "task1,task2,task3,task4,task5"
-      // ──────────────────────────────────────────────────────
+      List<Task> initialTasks = [];
+
+      // 1. Fetch expected templated local tasks
       if (_activeShift!.taskId != null && _activeShift!.taskId!.contains(',')) {
-        final parsed = Task.fromCommaSeparated(
-          _activeShift!.taskId,
-          shiftId: _activeShift!.shiftId,
-        );
-        if (parsed.isNotEmpty) {
-          debugPrint(
-              '✅ _loadTasks: Loaded ${parsed.length} tasks from shift.task_id (comma-separated)');
-          if (mounted) {
-            setState(() {
-              _tasks = parsed;
-              _loadingTasks = false;
-            });
-          }
-          return;
-        }
-      }
-
-      // ──────────────────────────────────────────────────────
-      // 2. Fetch tasks from client_final.tasks JSONB
-      // ──────────────────────────────────────────────────────
-      // a) Check if we already have client data with tasks
-      if (_activeClient != null && _activeClient!.tasks != null) {
-        final clientTasks = Task.fromClientTasksJson(
-          _activeClient!.tasks,
-          shiftId: _activeShift!.shiftId,
-        );
-        if (clientTasks.isNotEmpty) {
-          debugPrint(
-              '✅ _loadTasks: Loaded ${clientTasks.length} tasks from activeClient.tasks');
-          if (mounted) {
-            setState(() {
-              _tasks = clientTasks;
-              _loadingTasks = false;
-            });
-          }
-          return;
-        }
-      }
-
-      // b) Fetch tasks directly from client_final table via client_id
-      if (_activeShift!.clientId != null) {
+        initialTasks = Task.fromCommaSeparated(_activeShift!.taskId,
+            shiftId: _activeShift!.shiftId);
+      } else if (_activeClient != null && _activeClient!.tasks != null) {
+        initialTasks = Task.fromClientTasksJson(_activeClient!.tasks,
+            shiftId: _activeShift!.shiftId);
+      } else if (_activeShift!.clientId != null) {
         try {
           final clientResponse = await supabase
               .from(Tables.client)
               .select('tasks')
               .eq('id', _activeShift!.clientId!)
               .maybeSingle();
-
           if (clientResponse != null && clientResponse['tasks'] != null) {
-            final clientTasks = Task.fromClientTasksJson(
-              clientResponse['tasks'],
-              shiftId: _activeShift!.shiftId,
-            );
-            if (clientTasks.isNotEmpty) {
-              debugPrint(
-                  '✅ _loadTasks: Loaded ${clientTasks.length} tasks from client_final.tasks (DB)');
-              if (mounted) {
-                setState(() {
-                  _tasks = clientTasks;
-                  _loadingTasks = false;
-                });
-              }
-              return;
-            }
+            initialTasks = Task.fromClientTasksJson(clientResponse['tasks'],
+                shiftId: _activeShift!.shiftId);
           }
-        } catch (e) {
-          debugPrint('⚠️ _loadTasks: Error fetching client_final.tasks: $e');
-        }
+        } catch (_) {}
       }
 
-      // ──────────────────────────────────────────────────────
-      // 3. Fallback: Legacy tasks table by shift_id
-      // ──────────────────────────────────────────────────────
-      var response = await supabase
+      // 2. Fetch fully committed tasks live from the database
+      final liveTasksResponse = await supabase
           .from('tasks')
           .select('*')
-          .eq('shift_id', _activeShift!.shiftId)
-          .order('task_id');
+          .eq('shift_id', _activeShift!.shiftId);
 
-      debugPrint(
-          '📥 _loadTasks: Found ${response.length} tasks by shift_id=${_activeShift!.shiftId}');
+      final liveTasks =
+          liveTasksResponse.map<Task>((e) => Task.fromJson(e)).toList();
 
-      // 4. Fallback: try shift.task_id as a single task_code
-      if (response.isEmpty && _activeShift!.taskId != null) {
-        debugPrint(
-            '⚠️ No tasks by shift_id. Attempting fallback via task_code: ${_activeShift!.taskId}');
+      List<Task> finalTasks = [];
 
-        final shiftTaskCode = _activeShift!.taskId!;
-
+      // 3. Merge templates sequentially against database reality
+      if (initialTasks.isNotEmpty) {
+        for (int i = 0; i < initialTasks.length; i++) {
+          final template = initialTasks[i];
+          try {
+            final match =
+                liveTasks.firstWhere((lt) => lt.details == template.details);
+            finalTasks.add(match);
+          } catch (_) {
+            finalTasks.add(template);
+          }
+        }
+      } else if (liveTasks.isNotEmpty) {
+        finalTasks = liveTasks;
+      } else if (liveTasks.isEmpty && _activeShift!.taskId != null) {
+        // Deep Fallback: try shift.task_id as a single standalone task_code from DB
         final fallbackResponse = await supabase
             .from('tasks')
             .select('*')
-            .eq('task_code', shiftTaskCode);
-
+            .eq('task_code', _activeShift!.taskId!);
         if (fallbackResponse.isNotEmpty) {
-          debugPrint(
-              '✅ Found ${fallbackResponse.length} tasks via task_code=$shiftTaskCode');
-          response = fallbackResponse;
+          finalTasks =
+              fallbackResponse.map<Task>((e) => Task.fromJson(e)).toList();
         }
       }
 
-      final tasks = response.map<Task>((e) => Task.fromJson(e)).toList();
+      // 4. Fetch shift_task_log to integrate 'skipped', 'completed', or 'pending' statuses
+      final logsResponse = await supabase
+          .from('shift_task_log')
+          .select('*')
+          .eq('shift_id', _activeShift!.shiftId);
+      final logs = logsResponse as List;
+
+      for (int i = 0; i < finalTasks.length; i++) {
+        final task = finalTasks[i];
+        // Match by task_id if it's already in DB, or by order_index if it's local
+        final match = logs
+            .where((l) =>
+                (l['task_id'] == task.taskId && !task.isLocal) ||
+                l['order_index'] == i)
+            .firstOrNull;
+
+        if (match != null) {
+          finalTasks[i] = task.copyWith(
+            shiftTaskLogStatus: match['status'],
+            skipReason: match['skip_reason'],
+          );
+        }
+      }
 
       if (mounted) {
         setState(() {
-          _tasks = tasks;
+          _tasks = finalTasks;
           _loadingTasks = false;
         });
-
-        if (tasks.isEmpty) {
-          debugPrint(
-              '⚠️ _tasks is empty. No data in shift.task_id, client_final.tasks, or "tasks" table.');
-        }
       }
     } catch (e) {
       debugPrint('❌ Error loading tasks: $e');
@@ -1163,72 +1215,355 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
     }
   }
 
-  Future<void> _toggleTask(Task task, bool value) async {
-    // 1. Optimistic Update
-    final index = _tasks.indexWhere((t) => t.taskId == task.taskId);
+  Future<void> _upsertShiftTaskLog(int orderIndex, int? taskId, String status,
+      {String? skipReason}) async {
+    try {
+      final empId = await SessionManager.getEmpId();
+      if (empId == null) return;
+
+      final clientId = _activeShift!.clientId ?? _activeClient?.id ?? 0;
+
+      // Since the db often has rows pre-created with order_index and null task_id,
+      // we must conflict on order_index to correctly update the existing row
+      // rather than accidentally trying to insert a new row that violates the unique order_index constraint.
+      final response = await supabase.from('shift_task_log').upsert({
+        'shift_id': _activeShift!.shiftId,
+        'order_index': orderIndex,
+        if (taskId != null) 'task_id': taskId,
+        'emp_id': empId,
+        'client_id': clientId,
+        'status': status,
+        'skip_reason':
+            skipReason, // explicitly pass to ensure it clears when resuming
+        'completed_at': status == 'completed'
+            ? DateTime.now().toUtc().toIso8601String()
+            : null,
+      }, onConflict: 'shift_id, order_index').select();
+
+      debugPrint('✅ Upserted shift_task_log successfully: $response');
+    } catch (e) {
+      debugPrint('❌ Error upserting shift_task_log: $e');
+      if (mounted) {
+        _showSnackBar('Failed to update task log: $e', isError: true);
+      }
+    }
+  }
+
+  Future<void> _promptSkipTask(Task task) async {
+    final index = _tasks.indexWhere(
+        (t) => t.taskId == task.taskId && t.details == task.details);
     if (index == -1) return;
 
-    final updatedTask = Task(
-        taskId: task.taskId,
-        shiftId: task.shiftId,
-        details: task.details,
-        status: value,
-        comment: task.comment,
-        taskCode: task.taskCode,
-        isFromClient: task.isFromClient,
-        isFromShiftTaskId: task.isFromShiftTaskId);
+    final reasonController = TextEditingController();
+    final bool? confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+              title: const Text('Skip Task',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Please provide a reason for skipping this task:'),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: reasonController,
+                    decoration: InputDecoration(
+                      hintText: 'Reason for skipping',
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                    ),
+                    maxLines: 3,
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      foregroundColor: Colors.white),
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Skip Task'),
+                ),
+              ]);
+        });
+
+    if (confirmed == true && reasonController.text.trim().isNotEmpty) {
+      await _skipTaskAndSave(task, index, reasonController.text.trim());
+    } else if (confirmed == true && reasonController.text.trim().isEmpty) {
+      _showSnackBar('Skip reason is required.', isError: true);
+    }
+  }
+
+  Future<void> _skipTaskAndSave(Task task, int index, String reason) async {
+    // Optimistic update
+    Task updatedTask = task.copyWith(
+      status: false,
+      shiftTaskLogStatus: 'skipped',
+      skipReason: reason,
+    );
+    setState(() {
+      _tasks[index] = updatedTask;
+    });
+
+    try {
+      int? realTaskId;
+      if (task.isLocal) {
+        final nowUtc = DateTime.now().toUtc().toIso8601String();
+        // Task hasn't been instantiated physically on the Supabase task database yet - Create it!
+        final response = await supabase
+            .from('tasks')
+            .insert({
+              'shift_id': task.shiftId,
+              'details': task.details,
+              'status': false,
+              'task_created': nowUtc,
+              'task_completed': null,
+            })
+            .select()
+            .single();
+
+        final updated = Task.fromJson(response).copyWith(
+          shiftTaskLogStatus: 'skipped',
+          skipReason: reason,
+        );
+        realTaskId = updated.taskId;
+
+        setState(() {
+          _tasks[index] = updated;
+        });
+      } else {
+        // Shift task already exists natively natively! Overwriting.
+        await supabase.from('tasks').update({
+          'status': false,
+          'task_completed': null,
+        }).eq('task_id', task.taskId);
+        realTaskId = task.taskId;
+      }
+
+      await _upsertShiftTaskLog(index, realTaskId, 'skipped',
+          skipReason: reason);
+    } catch (e) {
+      debugPrint('❌ Error skipping task natively: $e');
+      _showSnackBar('Failed to skip. Check connection.', isError: true);
+      // Revert optimistic update
+      setState(() {
+        _tasks[index] = task;
+      });
+    }
+  }
+
+  Future<void> _toggleTask(Task task, bool value) async {
+    final index = _tasks.indexWhere(
+        (t) => t.taskId == task.taskId && t.details == task.details);
+    if (index == -1) return;
+
+    final newStatus = value ? 'completed' : 'pending';
+
+    // Optimistically update memory so checks snap instantly
+    Task updatedTask = task.copyWith(
+      status: value,
+      shiftTaskLogStatus: newStatus,
+      skipReason: null, // Clear skip reason if re-toggled
+    );
 
     setState(() {
       _tasks[index] = updatedTask;
     });
 
-    // 2. Only persist to legacy tasks table if NOT a local task
-    if (!task.isLocal) {
-      try {
-        await supabase
+    try {
+      final nowUtc = DateTime.now().toUtc().toIso8601String();
+      int? realTaskId;
+
+      if (task.isLocal) {
+        // Task hasn't been instantiated physically on the Supabase task database yet - Create it!
+        final response = await supabase
             .from('tasks')
-            .update({'status': value}).eq('task_id', task.taskId);
-      } catch (e) {
-        debugPrint('❌ Error auto-saving task: $e');
-        _showSnackBar('Values did not save to server. Check connection.',
-            isError: true);
+            .insert({
+              'shift_id': task.shiftId,
+              'details': task.details,
+              'status': value,
+              'task_created': nowUtc,
+              'task_completed': value ? nowUtc : null,
+            })
+            .select()
+            .single();
+
+        final updated = Task.fromJson(response).copyWith(
+          shiftTaskLogStatus: newStatus,
+          skipReason: null,
+        );
+        realTaskId = updated.taskId;
+
+        // Map native DB object back gracefully to terminate local tracking
+        setState(() {
+          _tasks[index] = updated;
+        });
+      } else {
+        // Shift task already exists natively natively! Overwriting.
+        await supabase.from('tasks').update({
+          'status': value,
+          'task_completed': value ? nowUtc : null,
+        }).eq('task_id', task.taskId);
+        realTaskId = task.taskId;
       }
+
+      await _upsertShiftTaskLog(index, realTaskId, newStatus);
+    } catch (e) {
+      debugPrint('❌ Error syncing task natively: $e');
+      _showSnackBar('Values did not sync. Check connection.', isError: true);
+      // Revert optimistic update
+      setState(() {
+        _tasks[index] = task;
+      });
     }
-    // Local tasks (from shift.task_id or client.tasks) toggle in-memory only
   }
 
-  Future<void> _handleClockOut() async {
-    setState(() {
-      _updatingTasks = true;
-    });
+  /// Whether all tasks are completed (or skipped)
+  bool get _allTasksCompleted =>
+      _tasks.every((t) => t.status || t.shiftTaskLogStatus == 'skipped');
+
+  /// Whether a manual clock-in is allowed:
+  /// - A shift must be loaded for today
+  /// - Shift must not already be clocked in / active / completed
+  bool get _canManualClockIn {
+    if (_activeShift == null) return false;
+    if (_isClockedIn) return false;
+    final status =
+        _activeShift!.shiftStatus?.toLowerCase().replaceAll(' ', '_');
+    // Allow clock-in only for scheduled (not yet started) shifts
+    return status == 'scheduled';
+  }
+
+  /// Whether a manual clock-out is allowed:
+  /// - Must be clocked in (shift active)
+  /// - All tasks must be completed
+  bool get _canManualClockOut {
+    if (!_isClockedIn) return false;
+    return _allTasksCompleted;
+  }
+
+  Future<void> _manualClockIn() async {
+    if (_activeShift == null || _manualClockingIn) return;
+
+    setState(() => _manualClockingIn = true);
 
     try {
-      // Validate again (redundant but safe)
-      if (!_tasks.every((t) => t.status)) {
-        _showSnackBar('Please complete all tasks first!', isError: true);
-        setState(() => _updatingTasks = false);
-        return;
+      final nowUtc = DateTime.now().toUtc();
+      final empId = await SessionManager.getEmpId();
+      if (empId == null) return;
+
+      await supabase.from('shift').update({
+        'clock_in': nowUtc.toIso8601String(),
+        'shift_status': 'Clocked in',
+      }).eq('shift_id', _activeShift!.shiftId);
+
+      double? lat, lng;
+      String clockInAddress = 'Manual Clock In';
+
+      if (_currentPosition != null) {
+        lat = _currentPosition!.latitude;
+        lng = _currentPosition!.longitude;
       }
 
-      if (_currentPosition == null) {
-        _showSnackBar('Waiting for location...', isError: true);
-        setState(() => _updatingTasks = false);
-        return;
-      }
+      final logResponse = await supabase.from('time_logs').insert({
+        'emp_id': empId,
+        'shift_id': _activeShift!.shiftId, // IMPORTANT
+        'clock_in_time': nowUtc.toIso8601String(),
+        if (lat != null) 'clock_in_latitude': lat,
+        if (lng != null) 'clock_in_longitude': lng,
+        'clock_in_address': clockInAddress,
+        'updated_at': nowUtc.toIso8601String(),
+      }).select('id');
 
-      _showSnackBar('✅ Tasks verified. Clocking out...');
-      // Delay to show the success message
-      await Future.delayed(const Duration(milliseconds: 1000));
-      if (mounted) {
-        await _autoClockOut(_currentPosition!);
-      }
+      setState(() {
+        _isClockedIn = true;
+        _clockInTimeUtc = nowUtc;
+        _currentLogId = logResponse.first['id'].toString();
+        _manualClockingIn = false;
+      });
+
+      _showSnackBar('Clocked In');
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _updatingTasks = false;
-        });
-        _showSnackBar('Error clocking out: $e', isError: true);
+      _showSnackBar('Error clocking in', isError: true);
+      setState(() => _manualClockingIn = false);
+    }
+  }
+
+  /// Manual Clock Out — triggered by the Clock Out button.
+  Future<void> _manualClockOut() async {
+    if (_activeShift == null || _manualClockingOut) return;
+
+    // Double-check all tasks are done
+    if (!_allTasksCompleted) {
+      _showSnackBar('Please complete all tasks before clocking out.',
+          isError: true);
+      return;
+    }
+
+    setState(() => _manualClockingOut = true);
+
+    try {
+      final nowUtc = DateTime.now().toUtc();
+
+      // 1. Update shift table: clock_out + status = 'Clocked out'
+      await supabase.from('shift').update({
+        'clock_out': nowUtc.toIso8601String(),
+        'shift_status': 'Clocked out',
+      }).eq('shift_id', _activeShift!.shiftId);
+
+      debugPrint('✅ Manual Clock Out: Updated shift ${_activeShift!.shiftId}');
+
+      // 2. Update time_logs entry if we have one
+      if (_currentLogId != null) {
+        final totalHours = _clockInTimeUtc != null
+            ? ((nowUtc.difference(_clockInTimeUtc!).inMinutes) / 60.0)
+            : 0.0;
+
+        double? lat, lng;
+        String clockOutAddress = 'Manual Clock Out';
+        if (_currentPosition != null) {
+          lat = double.parse(_currentPosition!.latitude.toStringAsFixed(8));
+          lng = double.parse(_currentPosition!.longitude.toStringAsFixed(8));
+          try {
+            clockOutAddress = await _reverseGeocode(
+                    _currentPosition!.latitude, _currentPosition!.longitude)
+                .timeout(const Duration(seconds: 3));
+          } catch (_) {}
+        }
+
+        await supabase.from('time_logs').update({
+          'clock_out_time': nowUtc.toIso8601String(),
+          if (lat != null) 'clock_out_latitude': lat,
+          if (lng != null) 'clock_out_longitude': lng,
+          'clock_out_address': clockOutAddress,
+          'total_hours': double.parse(totalHours.toStringAsFixed(2)),
+          'updated_at': nowUtc.toIso8601String(),
+        }).eq('id', _currentLogId!);
       }
+
+      setState(() {
+        _isClockedIn = false;
+        _clockInTimeUtc = null;
+        _currentLogId = null;
+        _currentPlaceName = null;
+        _activeShift = _activeShift!
+            .copyWith(shiftStatus: 'Clocked out', clockOut: nowUtc);
+        _manualClockingOut = false;
+      });
+
+      _showSnackBar('✅ Clocked Out successfully');
+
+      // Refresh to load next shift
+      _loadActiveShift();
+    } catch (e) {
+      debugPrint('❌ Manual Clock Out Error: $e');
+      _showSnackBar('Error clocking out: $e', isError: true);
+      if (mounted) setState(() => _manualClockingOut = false);
     }
   }
 
@@ -1516,7 +1851,7 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
                   controller: scrollController,
                   child: SafeArea(
                     child: Padding(
-                      padding: const EdgeInsets.all(24.0),
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 2),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1526,14 +1861,13 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
                             child: Container(
                               width: 40,
                               height: 4,
-                              margin: const EdgeInsets.only(bottom: 20),
+                              margin: const EdgeInsets.only(bottom: 2),
                               decoration: BoxDecoration(
                                 color: Colors.grey.shade300,
                                 borderRadius: BorderRadius.circular(2),
                               ),
                             ),
                           ),
-
                           // Status Header
                           Row(
                             children: [
@@ -1560,16 +1894,24 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      _isClockedIn
-                                          ? 'Currently Working'
-                                          : 'Ready to Start',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: Colors.grey.shade600,
-                                        fontWeight: FontWeight.w500,
+                                    if (_isClockedIn && _clockInTimeUtc != null)
+                                      Text(
+                                        'Clocked In at ${DateFormat('h:mm a').format(_clockInTimeUtc!.toLocal())}',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.grey.shade600,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      )
+                                    else
+                                      Text(
+                                        'Ready to Start',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: Colors.grey.shade600,
+                                          fontWeight: FontWeight.w500,
+                                        ),
                                       ),
-                                    ),
                                     const SizedBox(height: 2),
                                     Text(
                                       _isClockedIn
@@ -1589,7 +1931,147 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
                             ],
                           ),
 
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 16),
+
+                          // Manual Clock In / Out Buttons
+                          // Shift Selection Dropdown
+                          if (!_isClockedIn && _todayShifts.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 16),
+                              child: InputDecorator(
+                                decoration: InputDecoration(
+                                  labelText: 'Select Shift',
+                                  labelStyle: TextStyle(
+                                      color: Colors.blue.shade700,
+                                      fontWeight: FontWeight.bold),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 8),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide:
+                                        BorderSide(color: Colors.grey.shade300),
+                                  ),
+                                ),
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<Shift>(
+                                    isExpanded: true,
+                                    value: _todayShifts.contains(_activeShift)
+                                        ? _activeShift
+                                        : (_todayShifts.isNotEmpty
+                                            ? _todayShifts.first
+                                            : null),
+                                    items: _todayShifts.map((shift) {
+                                      return DropdownMenuItem<Shift>(
+                                        value: shift,
+                                        child: Text(
+                                          shift.formattedTimeRange,
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.w600),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      );
+                                    }).toList(),
+                                    onChanged: (selectedShift) {
+                                      if (selectedShift != null &&
+                                          selectedShift.shiftId !=
+                                              _activeShift?.shiftId) {
+                                        setState(() {
+                                          _activeShift = selectedShift;
+                                          _loadingActiveShift = true;
+                                        });
+                                        // Reload the client and tasks for the newly selected shift
+                                        _loadClientAndTasksForActiveShift();
+                                      }
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                          // Manual Clock In / Out Buttons
+                          if (_activeShift == null &&
+                              !_loadingActiveShift &&
+                              _todayShifts.isEmpty)
+                            const Padding(
+                              padding: EdgeInsets.only(bottom: 16),
+                              child: Text(
+                                'No shift scheduled',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.orange,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed:
+                                      _canManualClockIn ? _manualClockIn : null,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.blue,
+                                    foregroundColor: Colors.white,
+                                    disabledBackgroundColor:
+                                        Colors.grey.shade300,
+                                    disabledForegroundColor:
+                                        Colors.grey.shade500,
+                                    elevation: 0,
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  child: _manualClockingIn
+                                      ? const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                              color: Colors.white,
+                                              strokeWidth: 2),
+                                        )
+                                      : const Text('Clock In',
+                                          style: TextStyle(fontSize: 16)),
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: _canManualClockOut
+                                      ? _manualClockOut
+                                      : null,
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.grey.shade700,
+                                    disabledForegroundColor:
+                                        Colors.grey.shade400,
+                                    side: BorderSide(
+                                      color: _canManualClockOut
+                                          ? Colors.grey.shade700
+                                          : Colors.grey.shade300,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  child: _manualClockingOut
+                                      ? const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                              color: Colors.grey,
+                                              strokeWidth: 2),
+                                        )
+                                      : const Text('Clock Out',
+                                          style: TextStyle(fontSize: 16)),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
 
                           // Active Shift Info Card
                           if (_loadingActiveShift)
@@ -1597,8 +2079,7 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
                               padding: EdgeInsets.all(20.0),
                               child: Center(child: CircularProgressIndicator()),
                             )
-                          else if (_activeShift != null &&
-                              _activeClient != null)
+                          else if (_activeShift != null)
                             Column(
                               children: [
                                 Container(
@@ -1632,13 +2113,14 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
                                               CrossAxisAlignment.start,
                                           children: [
                                             Text(
-                                              _activeClient!.fullName,
+                                              _activeClient?.fullName ??
+                                                  'Client details loading...',
                                               style: const TextStyle(
                                                 fontWeight: FontWeight.bold,
                                                 fontSize: 15,
                                               ),
                                             ),
-                                            if (_activeClient!.serviceType !=
+                                            if (_activeClient?.serviceType !=
                                                     null &&
                                                 _activeClient!
                                                     .serviceType!.isNotEmpty)
@@ -1690,14 +2172,15 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
                                             ),
                                             const SizedBox(height: 4),
                                             Text(
-                                              '${_activeShift!.date} • ${_activeShift!.formattedTimeRange}',
+                                              '${_activeShift!.clockFormattedDate}  •  ${_activeShift!.clockFormattedTimeRangeWithDuration}',
                                               style: TextStyle(
                                                 color: Colors.grey.shade600,
                                                 fontSize: 12,
                                               ),
                                             ),
-                                            if (_activeClient!
-                                                .fullAddress.isNotEmpty) ...[
+                                            if (_activeClient != null &&
+                                                _activeClient!.fullAddress
+                                                    .isNotEmpty) ...[
                                               const SizedBox(height: 4),
                                               Row(
                                                 children: [
@@ -1855,126 +2338,115 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
                                     itemCount: _tasks.length,
                                     itemBuilder: (context, index) {
                                       final task = _tasks[index];
-                                      return CheckboxListTile(
-                                        // Enabled only when clocked in
-                                        enabled: _isClockedIn,
-                                        value: task.status,
-                                        onChanged: (val) =>
-                                            _toggleTask(task, val ?? false),
-                                        title: Text(
-                                          task.details ?? 'Task ${index + 1}',
-                                          style: TextStyle(
-                                            decoration: task.status
-                                                ? TextDecoration.lineThrough
+                                      return Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          InkWell(
+                                            onTap: _isClockedIn &&
+                                                    task.shiftTaskLogStatus !=
+                                                        'skipped'
+                                                ? () => _toggleTask(
+                                                    task, !task.status)
                                                 : null,
-                                            fontSize: 14,
-                                            color: task.status
-                                                ? Colors.grey
-                                                : Colors.black87,
+                                            child: Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      vertical: 4.0,
+                                                      horizontal: 8.0),
+                                              child: Row(
+                                                children: [
+                                                  Checkbox(
+                                                    value: task.status,
+                                                    onChanged: _isClockedIn &&
+                                                            task.shiftTaskLogStatus !=
+                                                                'skipped'
+                                                        ? (val) => _toggleTask(
+                                                            task, val ?? false)
+                                                        : null,
+                                                    activeColor: Colors.blue,
+                                                  ),
+                                                  Expanded(
+                                                    child: Text(
+                                                      task.details ??
+                                                          'Task ${index + 1}',
+                                                      style: TextStyle(
+                                                        decoration: task
+                                                                    .status ||
+                                                                task.shiftTaskLogStatus ==
+                                                                    'skipped'
+                                                            ? TextDecoration
+                                                                .lineThrough
+                                                            : null,
+                                                        fontSize: 14,
+                                                        color:
+                                                            task.shiftTaskLogStatus ==
+                                                                    'skipped'
+                                                                ? Colors.orange
+                                                                : (task.status
+                                                                    ? Colors
+                                                                        .grey
+                                                                    : Colors
+                                                                        .black87),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  if (_isClockedIn &&
+                                                      task.shiftTaskLogStatus !=
+                                                          'skipped')
+                                                    TextButton(
+                                                      onPressed: () =>
+                                                          _promptSkipTask(task),
+                                                      child: const Text('Skip',
+                                                          style: TextStyle(
+                                                              color:
+                                                                  Colors.orange,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold)),
+                                                    )
+                                                  else if (task
+                                                          .shiftTaskLogStatus ==
+                                                      'skipped')
+                                                    const Padding(
+                                                      padding: EdgeInsets.only(
+                                                          right: 16.0),
+                                                      child: Text('Skipped',
+                                                          style: TextStyle(
+                                                              color:
+                                                                  Colors.orange,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                              fontSize: 13)),
+                                                    ),
+                                                ],
+                                              ),
+                                            ),
                                           ),
-                                        ),
-                                        controlAffinity:
-                                            ListTileControlAffinity.leading,
-                                        contentPadding: EdgeInsets.zero,
-                                        activeColor: Colors.blue,
+                                          if (task.shiftTaskLogStatus ==
+                                                  'skipped' &&
+                                              task.skipReason != null &&
+                                              task.skipReason!.isNotEmpty)
+                                            Padding(
+                                              padding: const EdgeInsets.only(
+                                                  left: 48.0,
+                                                  bottom: 8.0,
+                                                  right: 16.0),
+                                              child: Text(
+                                                'Reason: ${task.skipReason}',
+                                                style: TextStyle(
+                                                    color: Colors.grey.shade600,
+                                                    fontSize: 13,
+                                                    fontStyle:
+                                                        FontStyle.italic),
+                                              ),
+                                            ),
+                                        ],
                                       );
                                     },
                                   ),
                               ],
-                            ),
-
-                          // Clock Out Button (only shows when clocked in)
-                          if (_isClockedIn)
-                            SizedBox(
-                              height: 56,
-                              child: ElevatedButton(
-                                onPressed: (_tasks.isNotEmpty &&
-                                        _tasks.every((t) => t.status) &&
-                                        _currentPosition != null &&
-                                        // Allow clock-out if geocoded coords available OR no coords (relax check)
-                                        (_geocodedClientLatLng == null ||
-                                            _calculateDistance(
-                                                    _currentPosition!.latitude,
-                                                    _currentPosition!.longitude,
-                                                    _geocodedClientLatLng![0],
-                                                    _geocodedClientLatLng![1]) <
-                                                (_geofenceRadius + 200)) &&
-                                        !_updatingTasks)
-                                    ? _handleClockOut
-                                    : null,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor:
-                                      Colors.redAccent, // Distinct color
-                                  foregroundColor: Colors.white,
-                                  elevation: 2,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  disabledBackgroundColor: Colors.grey.shade300,
-                                  disabledForegroundColor: Colors.grey.shade500,
-                                ),
-                                child: _updatingTasks
-                                    ? const Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          SizedBox(
-                                            width: 20,
-                                            height: 20,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                          SizedBox(width: 12),
-                                          Text(
-                                            'Processing...',
-                                            style: TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ],
-                                      )
-                                    : const Text(
-                                        'Clock Out',
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                              ),
-                            ),
-                          if (_isClockedIn)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 12),
-                              child: Text(
-                                _tasks.every((t) => t.status)
-                                    ? 'All tasks complete. You are ready to clock out.'
-                                    : 'Complete all tasks to enable Clock Out.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: _tasks.every((t) => t.status)
-                                      ? Colors.green
-                                      : Colors.orange,
-                                  fontWeight: _tasks.every((t) => t.status)
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
-                                ),
-                              ),
-                            ),
-                          if (!_isClockedIn)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 12),
-                              child: Text(
-                                'Enter the client\'s location to automatically clock in.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey.shade500,
-                                ),
-                              ),
                             ),
                         ],
                       ),

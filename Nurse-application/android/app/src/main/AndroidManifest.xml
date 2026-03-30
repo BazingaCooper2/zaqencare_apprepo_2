@@ -75,6 +75,11 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+            
+        <!-- Disable Impeller to fix black screen on some emulators -->
+        <meta-data
+            android:name="io.flutter.embedding.android.Renderer"
+            android:value="skia" />
 
     </application>
 

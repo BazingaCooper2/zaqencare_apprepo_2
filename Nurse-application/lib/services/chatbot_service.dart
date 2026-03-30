@@ -231,7 +231,7 @@ class ChatbotService {
       );
 
       if (!response.ok) {
-        return "⚠️ Request failed. Please try again.";
+        return "⚠️ Request failed: ${response.error}";
       }
 
       // Send email to supervisor via Gmail SMTP
@@ -266,9 +266,10 @@ class ChatbotService {
     String? startTime,
     String? endTime,
     String? signatureUrl,
+    String? leaveStartDate,
+    String? leaveEndDate,
   }) async {
     try {
-      final token = _client.auth.currentSession?.accessToken ?? _anonKey;
       const url = "$supabaseUrl/functions/v1/$edgeFunctionName";
 
       final body = {
@@ -278,16 +279,23 @@ class ChatbotService {
         if (startTime != null) "start_time": startTime,
         if (endTime != null) "end_time": endTime,
         if (signatureUrl != null) "signature_url": signatureUrl,
+        if (leaveStartDate != null) "leave_start_date": leaveStartDate,
+        if (leaveEndDate != null) "leave_end_date": leaveEndDate,
       };
 
       final res = await http.post(
         Uri.parse(url),
         headers: {
           "Content-Type": "application/json",
-          "Authorization": "Bearer $token",
+          "apikey": _anonKey,
+          "Authorization": "Bearer $_anonKey",
         },
         body: jsonEncode(body),
       );
+
+      // Debugging logs
+      print("STATUS: ${res.statusCode}");
+      print("BODY: ${res.body}");
 
       if (res.statusCode == 200) {
         return ChatbotResponse.fromJson(jsonDecode(res.body));
@@ -305,8 +313,12 @@ class ChatbotService {
   static Future<String> processMessageWithSignature(
     String message,
     int? empId,
-    String signatureUrl,
-  ) async {
+    String signatureUrl, {
+    String? leaveStartDate,
+    String? leaveEndDate,
+    String? startTime,
+    String? endTime,
+  }) async {
     if (empId == null) return "Please log in first.";
 
     final parsed = detectIntent(message);
@@ -317,6 +329,10 @@ class ChatbotService {
       message: message,
       intentType: intentCode,
       signatureUrl: signatureUrl,
+      leaveStartDate: leaveStartDate,
+      leaveEndDate: leaveEndDate,
+      startTime: startTime,
+      endTime: endTime,
     );
 
     if (response.ok) {
@@ -337,7 +353,7 @@ class ChatbotService {
       return "✅ Request with signature sent to ${response.supervisor}.";
     }
 
-    return "⚠️ Request failed. Please try again.";
+    return "⚠️ Request failed: ${response.error}";
   }
 
   // ---------------------------------------------------------------------------

@@ -174,6 +174,7 @@ class _IncidentReportFormWidgetState extends State<IncidentReportFormWidget> {
   }
 
   Future<void> _submitForm() async {
+    print("SUBMITTING REPORT SESSION: ${Supabase.instance.client.auth.currentSession}");
     if (!_formKey.currentState!.validate()) return;
 
     if (_incidentDate == null || _incidentTime == null) {
@@ -185,8 +186,7 @@ class _IncidentReportFormWidgetState extends State<IncidentReportFormWidget> {
     setState(() => _isSubmitting = true);
 
     try {
-      final empId = await SessionManager.getEmpId();
-      if (empId == null) {
+      if (SessionManager.empId == null) {
         if (mounted) {
           context.showSnackBar('You must be logged in to submit a report.',
               isError: true);
@@ -250,8 +250,14 @@ Actions Taken: ${_immediateActionsController.text.trim()}
 Who Informed: ${_whoInformedController.text.trim()}
 ''';
 
+      // Debug session info before insert
+      print("CURRENT USER: ${supabase.auth.currentUser}");
+      print("CURRENT SESSION: ${supabase.auth.currentSession}");
+      print("SESSION USER ID: ${supabase.auth.currentUser?.id}");
+      print("EMP ID BEING SENT: ${SessionManager.empId}");
+
       final data = {
-        'emp_id': empId,
+        'emp_id': SessionManager.empId,
         'incident_date': DateFormat('yyyy-MM-dd').format(_incidentDate!),
         'incident_time':
             '${_incidentTime!.hour.toString().padLeft(2, '0')}:${_incidentTime!.minute.toString().padLeft(2, '0')}:00',
@@ -261,10 +267,15 @@ Who Informed: ${_whoInformedController.text.trim()}
         'immediate_actions': fullActions,
         'client_condition': fullClientCondition,
         'medical_attention_required': _medicalAttentionRequired,
+        'reporter_name': _whoReportedController.text.trim(),
+        'created_at': DateTime.now().toIso8601String(),
       };
 
-      // Insert into Supabase
-      await supabase.from('incident_reports').insert(data);
+      // Insert into Supabase with .select()
+      final response = await supabase.from('incident_reports').insert(data).select();
+      
+      print("🚀 Incident Insert Result: $response");
+      debugPrint('✅ Incident report successfully inserted into Supabase');
 
       // Send email notification
       final emailSent = await EmailService.sendIncidentReportEmail(

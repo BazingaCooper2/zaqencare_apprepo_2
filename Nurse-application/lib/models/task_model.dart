@@ -7,6 +7,8 @@ class Task {
   final String? taskCode;
   final bool isFromClient; // true if from client_final.tasks JSONB
   final bool isFromShiftTaskId; // true if from shift.task_id comma-separated
+  final String? shiftTaskLogStatus; // pending, completed, skipped
+  final String? skipReason;
 
   Task({
     required this.taskId,
@@ -17,6 +19,8 @@ class Task {
     this.taskCode,
     this.isFromClient = false,
     this.isFromShiftTaskId = false,
+    this.shiftTaskLogStatus,
+    this.skipReason,
   });
 
   /// Whether this task was parsed locally (not from the `tasks` DB table).
@@ -152,5 +156,31 @@ class Task {
       'comment': comment,
       'task_code': taskCode,
     };
+  }
+
+  Task copyWith({
+    int? taskId,
+    int? shiftId,
+    String? details,
+    bool? status,
+    String? comment,
+    String? taskCode,
+    bool? isFromClient,
+    bool? isFromShiftTaskId,
+    String? shiftTaskLogStatus,
+    String? skipReason,
+  }) {
+    return Task(
+      taskId: taskId ?? this.taskId,
+      shiftId: shiftId ?? this.shiftId,
+      details: details ?? this.details,
+      status: status ?? this.status,
+      comment: comment ?? this.comment,
+      taskCode: taskCode ?? this.taskCode,
+      isFromClient: isFromClient ?? this.isFromClient,
+      isFromShiftTaskId: isFromShiftTaskId ?? this.isFromShiftTaskId,
+      shiftTaskLogStatus: shiftTaskLogStatus ?? this.shiftTaskLogStatus,
+      skipReason: skipReason ?? this.skipReason,
+    );
   }
 }
