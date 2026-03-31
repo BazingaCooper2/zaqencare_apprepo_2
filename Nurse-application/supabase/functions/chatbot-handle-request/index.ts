@@ -16,7 +16,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { emp_id, message, intent_type, signature_url, start_time, end_time, leave_start_date, leave_end_date } = await req.json();
+    const { emp_id, message, intent_type, signature_url, start_time, end_time, leave_start_date, leave_end_date, leave_type } = await req.json();
 
     if (!emp_id || !intent_type) throw new Error("Missing data in request");
 
@@ -34,18 +34,18 @@ serve(async (req) => {
       signature_url: signature_url ?? null,
     });
 
-    // 2. Create Leave Record if sick
+    // 2. Create Leave Record
     if (intent_type === "call_in_sick" || intent_type === "emergency_leave") {
       await createLeaveRecord({
         emp_id,
-        leave_type: intent_type,
+        leave_type: leave_type ?? intent_type,
         leave_reason: message,
         leave_start_date: leave_start_date ?? new Date().toISOString().slice(0, 10),
         leave_end_date: leave_end_date ?? new Date().toISOString().slice(0, 10),
         leave_start_time: start_time ?? null,
         leave_end_time: end_time ?? null,
         status: 'pending',
-        signature_url: signature_url ?? null,
+        // Note: signature_url is stored in shift_change_requests, not in leaves
       });
     }
 

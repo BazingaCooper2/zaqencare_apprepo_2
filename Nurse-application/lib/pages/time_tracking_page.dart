@@ -897,6 +897,78 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
     );
   }
 
+  /// Persists all current tasks into the `shift_tasks` table on clock-out.
+  /// Uses upsert with conflict on (shift_id, task_id) for real tasks,
+  /// and insert for temporary/local tasks (which have no task_id FK).
+  Future<void> _finalizeShiftTasks(int shiftId, int empId) async {
+    if (_tasks.isEmpty) return;
+
+    try {
+      final nowUtc = DateTime.now().toUtc().toIso8601String();
+
+      for (final task in _tasks) {
+        final finalStatus = task.shiftTaskLogStatus ??
+            (task.status ? 'completed' : 'pending');
+        final isCompleted = finalStatus == 'completed';
+        final isTemporary = task.isLocal;
+        final taskName = task.details ?? 'Task';
+
+        final row = <String, dynamic>{
+          'shift_id': shiftId,
+          'task_name': taskName,
+          'is_temporary': isTemporary,
+          'status': finalStatus,
+          'skip_reason': task.skipReason,
+          'completed_at': isCompleted ? nowUtc : null,
+          'completed_by': isCompleted ? empId : null,
+        };
+
+        if (!isTemporary && !task.isFromClient && task.taskId > 0) {
+          row['task_id'] = task.taskId;
+        }
+
+        try {
+          if (row.containsKey('task_id')) {
+            await supabase
+                .from('shift_tasks')
+                .upsert(row, onConflict: 'shift_id, task_id');
+          } else {
+             // Look for existing by name to prevent duplicates if task_id isn't provided
+             final existing = await supabase.from('shift_tasks')
+                .select('shift_task_id')
+                .eq('shift_id', shiftId)
+                .eq('task_name', taskName)
+                .maybeSingle();
+             if (existing != null) {
+                await supabase.from('shift_tasks').update(row).eq('shift_task_id', existing['shift_task_id']);
+             } else {
+                await supabase.from('shift_tasks').insert(row);
+             }
+          }
+        } catch (dbErr) {
+          // If upsert fails because of care_plan_tasks foreign key violation or other constraint
+          row.remove('task_id');
+          final existing = await supabase.from('shift_tasks')
+               .select('shift_task_id')
+               .eq('shift_id', shiftId)
+               .eq('task_name', taskName)
+               .maybeSingle();           
+          if (existing != null) {
+             await supabase.from('shift_tasks').update(row).eq('shift_task_id', existing['shift_task_id']);
+          } else {
+             await supabase.from('shift_tasks').insert(row);
+          }
+        }
+      }
+
+      debugPrint(
+          '✅ _finalizeShiftTasks: wrote ${_tasks.length} task(s) to shift_tasks for shift $shiftId');
+    } catch (e) {
+      // Non-fatal — log and continue so clock-out itself is never blocked
+      debugPrint('⚠️ _finalizeShiftTasks error (non-fatal): $e');
+    }
+  }
+
   Future<void> _autoClockOut(Position position) async {
     if (_currentLogId == null || _permissionDenied) return;
 
@@ -952,6 +1024,12 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
               '✅ Updated shift table with clock_out time and completed status');
         } catch (e) {
           debugPrint('⚠️ Failed to update shift table clock_out: $e');
+        }
+
+        // Persist final task outcomes to shift_tasks table
+        final empId = await SessionManager.getEmpId();
+        if (empId != null) {
+          await _finalizeShiftTasks(_activeShift!.shiftId, empId);
         }
       }
 
@@ -1222,6 +1300,7 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
       if (empId == null) return;
 
       final clientId = _activeShift!.clientId ?? _activeClient?.id ?? 0;
+      final nowUtc = DateTime.now().toUtc().toIso8601String();
 
       // Since the db often has rows pre-created with order_index and null task_id,
       // we must conflict on order_index to correctly update the existing row
@@ -1236,11 +1315,63 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
         'skip_reason':
             skipReason, // explicitly pass to ensure it clears when resuming
         'completed_at': status == 'completed'
-            ? DateTime.now().toUtc().toIso8601String()
+            ? nowUtc
             : null,
       }, onConflict: 'shift_id, order_index').select();
 
       debugPrint('✅ Upserted shift_task_log successfully: $response');
+      
+      // -- ALSO sync to the new shift_tasks table (dynamically in real-time) --
+      if (_tasks.length > orderIndex) {
+        final taskDetails = _tasks[orderIndex].details ?? 'Task';
+        final isCompleted = status == 'completed';
+        final isTemporary = _tasks[orderIndex].isLocal;
+        
+        final row = <String, dynamic>{
+          'shift_id': _activeShift!.shiftId,
+          'task_name': taskDetails,
+          'is_temporary': isTemporary,
+          'status': status,
+          'skip_reason': skipReason,
+          'completed_at': isCompleted ? nowUtc : null,
+          'completed_by': isCompleted ? empId : null,
+        };
+
+        if (taskId != null && taskId > 0 && !isTemporary) {
+           row['task_id'] = taskId;
+        }
+
+        try {
+           if (row.containsKey('task_id')) {
+             await supabase.from('shift_tasks').upsert(row, onConflict: 'shift_id, task_id');
+           } else {
+             final existing = await supabase.from('shift_tasks')
+                .select('shift_task_id')
+                .eq('shift_id', _activeShift!.shiftId)
+                .eq('task_name', taskDetails)
+                .maybeSingle();
+             if (existing != null) {
+                await supabase.from('shift_tasks').update(row).eq('shift_task_id', existing['shift_task_id']);
+             } else {
+                await supabase.from('shift_tasks').insert(row);
+             }
+           }
+        } catch (fkError) {
+           // Fallback if care_plan_tasks FK constraint fails
+           row.remove('task_id');
+           final existing = await supabase.from('shift_tasks')
+               .select('shift_task_id')
+               .eq('shift_id', _activeShift!.shiftId)
+               .eq('task_name', taskDetails)
+               .maybeSingle();           
+           if (existing != null) {
+               await supabase.from('shift_tasks').update(row).eq('shift_task_id', existing['shift_task_id']);
+           } else {
+               await supabase.from('shift_tasks').insert(row);
+           }
+        }
+        debugPrint('✅ Synced dynamically to shift_tasks table.');
+      }
     } catch (e) {
       debugPrint('❌ Error upserting shift_task_log: $e');
       if (mounted) {
@@ -1544,6 +1675,12 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
           'total_hours': double.parse(totalHours.toStringAsFixed(2)),
           'updated_at': nowUtc.toIso8601String(),
         }).eq('id', _currentLogId!);
+      }
+
+      // Persist final task outcomes to shift_tasks table
+      final empId = await SessionManager.getEmpId();
+      if (empId != null) {
+        await _finalizeShiftTasks(_activeShift!.shiftId, empId);
       }
 
       setState(() {

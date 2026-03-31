@@ -165,10 +165,6 @@ class _EmployeeInjuryFormState extends State<EmployeeInjuryForm> {
   Future<void> _submitForm() async {
     print("SUBMITTING INJURY REPORT SESSION: ${Supabase.instance.client.auth.currentSession}");
     if (!_formKey.currentState!.validate()) return;
-    if (_injuryDate == null) {
-      context.showSnackBar('Please select injury date', isError: true);
-      return;
-    }
 
     setState(() => _isSubmitting = true);
 
@@ -186,64 +182,48 @@ class _EmployeeInjuryFormState extends State<EmployeeInjuryForm> {
             await _uploadSignatureToSupabase(_signatureImage!);
       }
 
-      // Concatenate full description
-      final fullDescription = '''
-DESCRIPTION: ${_descriptionController.text.trim()}
-
---- REPORT DETAILS (PART 1) ---
-Reported To: ${_supervisorReportedToController.text.trim()}
-Date Reported: ${_dateReported != null ? DateFormat('yyyy-MM-dd').format(_dateReported!) : 'N/A'}
-Reason for Delay: ${_reasonForDelayController.text.trim()}
-
---- PERSONAL DATA (PART 2) ---
-Name: ${_employeeNameController.text.trim()}
-Phone: ${_employeePhoneController.text.trim()}
-Email: ${_employeeEmailController.text.trim()}
-Address: ${_employeeAddressController.text.trim()}
-RTW Package Taken: $_returnToWorkPackageTaken
-
---- INJURY DETAILS (PART 3) ---
-Time Left Work: ${_timeLeftWork != null ? (mounted ? _timeLeftWork!.format(context) : 'N/A') : 'N/A'}
-Location: ${_locationController.text.trim()}
-Client Involved: ${_clientInvolvedController.text.trim()}
-Other Body Parts: ${_otherBodyPartController.text.trim()}
-
---- WITNESS (PART 6) ---
-Name: ${_witnessNameController.text.trim()}
-Phone: ${_witnessPhoneController.text.trim()}
-
---- HCP DETAILS (PART 7) ---
-HCP Name/Title: ${_hcpNameController.text.trim()}
-Address: ${_hcpAddressController.text.trim()}
-Phone: ${_hcpPhoneController.text.trim()}
-Brought FAF Form: $_broughtFafForm
-
---- SIGNATURE ---
-URL: ${_uploadedSignatureUrl ?? 'Not Signed'}
-''';
-
       final bodyPartsList =
           _bodyParts.entries.where((e) => e.value).map((e) => e.key).toList();
-      final bodyPartsMap = {for (var e in bodyPartsList) e: true};
+      final bodyPartsMap = <String, dynamic>{for (var e in bodyPartsList) e: true};
+      
+      if (_otherBodyPartController.text.trim().isNotEmpty) {
+        bodyPartsMap['Other_Details'] = _otherBodyPartController.text.trim();
+      }
 
-      // Debug session info before insert
-      print("CURRENT USER: ${supabase.auth.currentUser}");
-      print("CURRENT SESSION: ${supabase.auth.currentSession}");
-      print("SESSION USER ID: ${supabase.auth.currentUser?.id}");
-      print("EMP ID BEING SENT: ${SessionManager.empId}");
+      String _val(TextEditingController c) {
+        final text = c.text.trim();
+        return text.isEmpty ? 'N/A' : text;
+      }
 
       final data = {
         'emp_id': SessionManager.empId,
-        'injury_date': DateFormat('yyyy-MM-dd').format(_injuryDate!),
-        'injury_time': _injuryTime != null
-            ? '${_injuryTime!.hour.toString().padLeft(2, '0')}:${_injuryTime!.minute.toString().padLeft(2, '0')}:00'
-            : null,
-        'program': _programController.text.trim(),
-        'injury_description': fullDescription,
+        'date': _injuryDate != null ? DateFormat('yyyy-MM-dd').format(_injuryDate!) : DateFormat('yyyy-MM-dd').format(DateTime.now()), // required 'date' field
+        'injury_date': _injuryDate != null ? DateFormat('yyyy-MM-dd').format(_injuryDate!) : null,
+        'injury_time': _injuryTime != null ? '${_injuryTime!.hour.toString().padLeft(2, '0')}:${_injuryTime!.minute.toString().padLeft(2, '0')}:00' : null,
+        'reported_date': _dateReported != null ? DateFormat('yyyy-MM-dd').format(_dateReported!) : null,
+        'delay_reason': _val(_reasonForDelayController),
+        'program': _val(_programController),
+        'location': _val(_locationController),
+        'description': _val(_descriptionController),
         'injured_body_parts': bodyPartsMap,
         'medical_attention_required': _medicalAttentionRequired,
+        'rtw_package_taken': _returnToWorkPackageTaken,
+        'time_left_work': _timeLeftWork != null ? '${_timeLeftWork!.hour.toString().padLeft(2, '0')}:${_timeLeftWork!.minute.toString().padLeft(2, '0')}:00' : null,
+        'client_involved': _val(_clientInvolvedController),
+        'witness_name': _val(_witnessNameController),
+        'witness_phone': _val(_witnessPhoneController),
+        'hcp_name': _val(_hcpNameController),
+        'hcp_address': _val(_hcpAddressController),
+        'hcp_phone': _val(_hcpPhoneController),
+        'faf_form_brought': _broughtFafForm,
         'signature_url': _uploadedSignatureUrl,
-        'reporter_name': _employeeNameController.text.trim(),
+        'employee_signature': _uploadedSignatureUrl != null ? {'url': _uploadedSignatureUrl} : null,
+        'reporter_name': _val(_employeeNameController),
+        'emp_name': _val(_employeeNameController),
+        'emp_phone': _val(_employeePhoneController),
+        'emp_email': _val(_employeeEmailController),
+        'emp_address': _val(_employeeAddressController),
+        'reported_to_supervisor_name': _val(_supervisorReportedToController),
         'created_at': DateTime.now().toIso8601String(),
       };
 
@@ -254,12 +234,12 @@ URL: ${_uploadedSignatureUrl ?? 'Not Signed'}
       debugPrint('✅ Injury report successfully inserted into Supabase');
 
       final emailSent = await EmailService.sendInjuryReportEmail(
-        injuryDate: DateFormat('yyyy-MM-dd').format(_injuryDate!),
+        injuryDate: _injuryDate != null ? DateFormat('yyyy-MM-dd').format(_injuryDate!) : 'N/A',
         injuryTime: _injuryTime != null
             ? (mounted ? _injuryTime!.format(context) : 'N/A')
             : 'N/A',
-        program: _programController.text.trim(),
-        description: _descriptionController.text.trim(),
+        program: _val(_programController),
+        description: _val(_descriptionController),
         bodyParts: bodyPartsList,
         medicalAttentionRequired: _medicalAttentionRequired,
         signatureImage: _signatureImage,
@@ -589,8 +569,7 @@ URL: ${_uploadedSignatureUrl ?? 'Not Signed'}
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       ),
-      validator:
-          required ? (v) => (v == null || v.isEmpty) ? 'Required' : null : null,
+      validator: null, // Removed validation
     );
   }
 

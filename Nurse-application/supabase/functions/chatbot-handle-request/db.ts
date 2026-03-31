@@ -51,11 +51,12 @@ export async function createShiftChangeRequest(payload: any) {
 }
 
 export async function createLeaveRecord(payload: any) {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("leaves")
     .insert([payload])
     .select()
     .single();
+  if (error) throw new Error(`Leave insert failed: ${error.message}`);
   return data;
 }
 

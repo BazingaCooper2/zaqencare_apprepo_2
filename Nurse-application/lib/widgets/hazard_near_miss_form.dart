@@ -153,21 +153,6 @@ class _HazardNearMissFormState extends State<HazardNearMissForm> {
     print("SUBMITTING HAZARD REPORT SESSION: ${Supabase.instance.client.auth.currentSession}");
     if (!_formKey.currentState!.validate()) return;
 
-    if (_incidentDate == null || _incidentTime == null) {
-      context.showSnackBar('Please select incident date and time',
-          isError: true);
-      return;
-    }
-    if (_hazardRating == null) {
-      context.showSnackBar('Please select hazard rating', isError: true);
-      return;
-    }
-    if (_selectedHazardTypes.isEmpty) {
-      context.showSnackBar('Please select at least one hazard type',
-          isError: true);
-      return;
-    }
-
     setState(() => _isSubmitting = true);
 
     try {
@@ -188,49 +173,32 @@ class _HazardNearMissFormState extends State<HazardNearMissForm> {
         }
       }
 
-      // Combine extended fields into statement since DB likely lacks specific columns
-      final extendedStatement = '''
-${_hazardStatementController.text.trim()}
-
---- ADDITIONAL REPORT DETAILS ---
-Reporter Telephone: ${_telephoneController.text.trim()}
-Supervisor Reported To: ${_supervisorController.text.trim()}
-Date Reported: ${_reportedDate != null ? DateFormat('yyyy-MM-dd').format(_reportedDate!) : 'N/A'}
-Time Reported: ${_reportedTime != null ? (mounted ? _reportedTime!.format(context) : 'N/A') : 'N/A'}
-Reason for Delay: ${_reasonForDelayController.text.trim()}
-
---- INDIVIDUALS INVOLVED ---
-Workers: ${_workersController.text.trim()}
-Clients: ${_clientsController.text.trim()}
-Others: ${_othersController.text.trim()}
-
---- WITNESS REMARKS ---
-Witness Name: ${_witnessNameController.text.trim()}
-Remarks: ${_witnessRemarksController.text.trim()}
-
---- SIGNATURE ---
-Signature URL: ${_uploadedSignatureUrl ?? 'Not Signed'}
-''';
-
-      // Prepare data for Supabase insert
-      // Debug session info before insert
-      print("CURRENT USER: ${supabase.auth.currentUser}");
-      print("CURRENT SESSION: ${supabase.auth.currentSession}");
-      print("SESSION USER ID: ${supabase.auth.currentUser?.id}");
-      print("EMP ID BEING SENT: ${SessionManager.empId}");
+      String _val(TextEditingController c) {
+        final text = c.text.trim();
+        return text.isEmpty ? 'N/A' : text;
+      }
 
       final data = {
         'emp_id': SessionManager.empId,
-        'incident_date': DateFormat('yyyy-MM-dd').format(_incidentDate!),
-        'incident_time':
-            '${_incidentTime!.hour.toString().padLeft(2, '0')}:${_incidentTime!.minute.toString().padLeft(2, '0')}:00',
-        'incident_location': _locationController.text.trim(),
-        'hazard_rating': _hazardRating,
-        'hazard_types': _selectedHazardTypes,
-        'hazard_statement': extendedStatement, // Using the extended statement
-        'immediate_action': _immediateActionController.text.trim(),
+        'reported_date': _reportedDate != null ? DateFormat('yyyy-MM-dd').format(_reportedDate!) : null,
+        'reported_time': _reportedTime != null ? '${_reportedTime!.hour.toString().padLeft(2, '0')}:${_reportedTime!.minute.toString().padLeft(2, '0')}:00' : null,
+        'incident_date': _incidentDate != null ? DateFormat('yyyy-MM-dd').format(_incidentDate!) : null,
+        'incident_time': _incidentTime != null ? '${_incidentTime!.hour.toString().padLeft(2, '0')}:${_incidentTime!.minute.toString().padLeft(2, '0')}:00' : null,
+        'incident_location': _val(_locationController),
         'documented_on_hazard_board': _documentedOnBoard,
-        'reporter_name': _witnessNameController.text.trim(),
+        'delay_reason': _val(_reasonForDelayController),
+        'hazard_rating': _hazardRating ?? 'N/A',
+        'hazard_types': _selectedHazardTypes.isEmpty ? ['N/A'] : _selectedHazardTypes,
+        'hazard_statement': _val(_hazardStatementController),
+        'immediate_action': _val(_immediateActionController),
+        'phone': int.tryParse(_telephoneController.text.trim()),
+        'supervisor_notified': _val(_supervisorController),
+        'workers_involved': _val(_workersController),
+        'clients_involved': _val(_clientsController),
+        'others_involved': _val(_othersController),
+        'witness_name': _val(_witnessNameController),
+        'witness_statement': _val(_witnessRemarksController),
+        'reporter_signature': _uploadedSignatureUrl != null ? {'url': _uploadedSignatureUrl} : null,
         'created_at': DateTime.now().toIso8601String(),
       };
 
@@ -242,14 +210,13 @@ Signature URL: ${_uploadedSignatureUrl ?? 'Not Signed'}
 
       // Send email notification (passing distinct fields for better formatting)
       final emailSent = await EmailService.sendHazardReportEmail(
-        incidentDate: DateFormat('yyyy-MM-dd').format(_incidentDate!),
-        incidentTime:
-            '${_incidentTime!.hour.toString().padLeft(2, '0')}:${_incidentTime!.minute.toString().padLeft(2, '0')}',
-        location: _locationController.text.trim(),
-        hazardRating: _hazardRating!,
-        hazardTypes: _selectedHazardTypes,
-        hazardStatement: _hazardStatementController.text.trim(),
-        immediateAction: _immediateActionController.text.trim(),
+        incidentDate: _incidentDate != null ? DateFormat('yyyy-MM-dd').format(_incidentDate!) : 'N/A',
+        incidentTime: _incidentTime != null ? '${_incidentTime!.hour.toString().padLeft(2, '0')}:${_incidentTime!.minute.toString().padLeft(2, '0')}' : 'N/A',
+        location: _val(_locationController),
+        hazardRating: _hazardRating ?? 'N/A',
+        hazardTypes: _selectedHazardTypes.isEmpty ? ['N/A'] : _selectedHazardTypes,
+        hazardStatement: _val(_hazardStatementController),
+        immediateAction: _val(_immediateActionController),
         // New fields for email
         telephone: _telephoneController.text.trim(),
         supervisor: _supervisorController.text.trim(),
@@ -645,14 +612,7 @@ Signature URL: ${_uploadedSignatureUrl ?? 'Not Signed'}
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       ),
-      validator: required
-          ? (value) {
-              if (value == null || value.trim().isEmpty) {
-                return validatorMsg ?? 'Required';
-              }
-              return null;
-            }
-          : null,
+      validator: null, // Removed validation requirement
     );
   }
 
@@ -677,8 +637,7 @@ Signature URL: ${_uploadedSignatureUrl ?? 'Not Signed'}
               ))
           .toList(),
       onChanged: onChanged,
-      validator: (value) =>
-          value == null ? 'Please select $label'.toLowerCase() : null,
+      validator: null, // Removed validation requirement
     );
   }
 

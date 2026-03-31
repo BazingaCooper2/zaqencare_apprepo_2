@@ -189,6 +189,7 @@ class _ChatbotModalState extends State<ChatbotModal> {
         String? leaveEndDate,
         String? startTime,
         String? endTime,
+        String? leaveType,
       }) async {
     if (message.trim().isEmpty || _isLoading) return;
 
@@ -217,6 +218,8 @@ class _ChatbotModalState extends State<ChatbotModal> {
       leaveEndDate: leaveEndDate,
       startTime: startTime,
       endTime: endTime,
+      leaveType: leaveType,
+      intentOverride: 'call_in_sick',
     );
 
     // Add bot response
@@ -279,6 +282,17 @@ class _ChatbotModalState extends State<ChatbotModal> {
     TimeOfDay endTime = const TimeOfDay(hour: 17, minute: 0);
     Uint8List? signatureImage;
     bool isSubmitting = false;
+    String? selectedLeaveType;
+
+    const leaveTypes = [
+      'Sick',
+      'Vacation',
+      'Leave of Absence',
+      'Float',
+      'Bereavement',
+      'Day in Lieu of Public Holiday',
+      'Other',
+    ];
 
     showDialog(
       context: context,
@@ -292,6 +306,34 @@ class _ChatbotModalState extends State<ChatbotModal> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // ── Leave Type Dropdown ──────────────────────────────────
+                  const Text('Leave Type:',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: selectedLeaveType,
+                    decoration: InputDecoration(
+                      hintText: 'Select leave type',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 14),
+                    ),
+                    items: leaveTypes
+                        .map((type) => DropdownMenuItem(
+                              value: type,
+                              child: Text(type),
+                            ))
+                        .toList(),
+                    onChanged: (value) {
+                      setDialogState(() {
+                        selectedLeaveType = value;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  // ── Leave Duration ───────────────────────────────────────
                   const Text('Select Leave Duration:',
                       style: TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
@@ -565,6 +607,13 @@ class _ChatbotModalState extends State<ChatbotModal> {
                   ? null
                   : () async {
                       final reason = reasonController.text.trim();
+                      if (selectedLeaveType == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text('Please select a leave type')),
+                        );
+                        return;
+                      }
                       if (reason.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
@@ -694,12 +743,13 @@ class _ChatbotModalState extends State<ChatbotModal> {
                             "${endTime.hour.toString().padLeft(2, '0')}:${endTime.minute.toString().padLeft(2, '0')}:00";
 
                         await _sendMessageWithSignature(
-                          'I need to call in sick from $fromStr $startStr to $toStr $endStr. Reason: $reason',
+                          'I need to take ${selectedLeaveType ?? "leave"} from $fromStr $startStr to $toStr $endStr. Reason: $reason',
                           publicUrl,
                           leaveStartDate: fromStr,
                           leaveEndDate: toStr,
                           startTime: startStr,
                           endTime: endStr,
+                          leaveType: selectedLeaveType,
                         );
                       } catch (e) {
                         debugPrint('Error in call in sick: $e');

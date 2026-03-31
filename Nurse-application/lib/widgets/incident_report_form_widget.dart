@@ -60,8 +60,7 @@ class _IncidentReportFormWidgetState extends State<IncidentReportFormWidget> {
       TextEditingController(); // "Sequence of events leading up to incident"
 
   // Maps to client_condition
-  final _painDiscomfortController =
-      TextEditingController(); // "Did client express pain/discomfort?"
+  bool _painExpressed = false; // "Did client express pain/discomfort?"
   final _clientConditionController =
       TextEditingController(); // "Client's condition (alert, injured...)"
 
@@ -75,8 +74,7 @@ class _IncidentReportFormWidgetState extends State<IncidentReportFormWidget> {
       TextEditingController(); // "Did anyone get hurt or require medical attention details"
 
   // Environmental Hazards
-  final _environmentalHazardsController =
-      TextEditingController(); // "Were there environmental hazards present?"
+  bool _environmentalHazards = false; // "Were there environmental hazards present?"
 
   // Signature
   final SignatureController _signatureController = SignatureController(
@@ -108,12 +106,10 @@ class _IncidentReportFormWidgetState extends State<IncidentReportFormWidget> {
     _whatStatedController.dispose();
     _personalObservationController.dispose();
     _sequenceController.dispose();
-    _painDiscomfortController.dispose();
     _clientConditionController.dispose();
     _immediateActionsController.dispose();
     _whoInformedController.dispose();
     _injuryDetailsController.dispose();
-    _environmentalHazardsController.dispose();
     _signatureController.dispose();
     super.dispose();
   }
@@ -177,12 +173,6 @@ class _IncidentReportFormWidgetState extends State<IncidentReportFormWidget> {
     print("SUBMITTING REPORT SESSION: ${Supabase.instance.client.auth.currentSession}");
     if (!_formKey.currentState!.validate()) return;
 
-    if (_incidentDate == null || _incidentTime == null) {
-      context.showSnackBar('Please select incident date and time',
-          isError: true);
-      return;
-    }
-
     setState(() => _isSubmitting = true);
 
     try {
@@ -203,71 +193,50 @@ class _IncidentReportFormWidgetState extends State<IncidentReportFormWidget> {
         }
       }
 
-      // Concatenate fields into schema-supported columns
-
-      // incident_description: Aggregates general incident details
-      final fullDescription = '''
-INCIDENT: ${_incidentDescriptionController.text.trim()}
-
---- ADDITIONAL DETAILS ---
-Who Reported: ${_whoReportedController.text.trim()}
-Statement: ${_whatStatedController.text.trim()}
-Personal Observation: ${_personalObservationController.text.trim()}
-Environmental Hazards: ${_environmentalHazardsController.text.trim()}
-
---- INDIVIDUALS INVOLVED ---
-Workers: ${_workersController.text.trim()}
-Clients: ${_clientsController.text.trim()}
-Others: ${_othersController.text.trim()}
-
---- WITNESS ---
-Name: ${_witnessNameController.text.trim()}
-Title: ${_witnessTitleController.text.trim()}
-Contact: ${_witnessContactController.text.trim()}
-
---- REPORT METADATA ---
-Job Title: ${_jobTitleController.text.trim()}
-Phone: ${_telephoneController.text.trim()}
-Email: ${_emailController.text.trim()}
-Supervisor Reported To: ${_supervisorReportedToController.text.trim()}
-Date Reported: ${_dateReported != null ? DateFormat('yyyy-MM-dd').format(_dateReported!) : 'N/A'}
-Time Reported: ${_timeReported != null ? (mounted ? _timeReported!.format(context) : 'N/A') : 'N/A'}
-
---- SIGNATURE ---
-Signature URL: ${_uploadedSignatureUrl ?? 'Not Signed'}
-''';
-
-      // client_condition: Aggregates condition questions
-      final fullClientCondition = '''
-Condition: ${_clientConditionController.text.trim()}
-Expressed Pain/Discomfort: ${_painDiscomfortController.text.trim()}
-Injury Details: ${_injuryDetailsController.text.trim()}
-''';
-
-      // immediate_actions: Aggregates actions and notifications
-      final fullActions = '''
-Actions Taken: ${_immediateActionsController.text.trim()}
-Who Informed: ${_whoInformedController.text.trim()}
-''';
-
       // Debug session info before insert
       print("CURRENT USER: ${supabase.auth.currentUser}");
       print("CURRENT SESSION: ${supabase.auth.currentSession}");
       print("SESSION USER ID: ${supabase.auth.currentUser?.id}");
       print("EMP ID BEING SENT: ${SessionManager.empId}");
 
+      String _val(TextEditingController c) {
+        final text = c.text.trim();
+        return text.isEmpty ? 'N/A' : text;
+      }
+
       final data = {
         'emp_id': SessionManager.empId,
-        'incident_date': DateFormat('yyyy-MM-dd').format(_incidentDate!),
-        'incident_time':
-            '${_incidentTime!.hour.toString().padLeft(2, '0')}:${_incidentTime!.minute.toString().padLeft(2, '0')}:00',
-        'incident_location': _locationController.text.trim(),
-        'incident_description': fullDescription,
-        'sequence_of_events': _sequenceController.text.trim(),
-        'immediate_actions': fullActions,
-        'client_condition': fullClientCondition,
+        'job_title': _val(_jobTitleController),
+        'work_location': _val(_locationController),
+        'supervisor_name': _val(_supervisorReportedToController),
+        'incident_date': _incidentDate != null ? DateFormat('yyyy-MM-dd').format(_incidentDate!) : null,
+        'incident_time': _incidentTime != null ? '${_incidentTime!.hour.toString().padLeft(2, '0')}:${_incidentTime!.minute.toString().padLeft(2, '0')}:00' : null,
+        'incident_location': _val(_locationController),
+        'who_reported': _val(_whoReportedController),
+        'incident_description': _val(_incidentDescriptionController),
+        'sequence_of_events': _val(_sequenceController),
+        'client_condition': _val(_clientConditionController),
+        'pain_expressed': _painExpressed,
         'medical_attention_required': _medicalAttentionRequired,
-        'reporter_name': _whoReportedController.text.trim(),
+        'environmental_hazards': _environmentalHazards,
+        'immediate_actions': _val(_immediateActionsController),
+        'who_was_informed': _val(_whoInformedController),
+        'reporter_name': _val(_whoReportedController),
+        'telephone': int.tryParse(_telephoneController.text.trim()),
+        'email': _val(_emailController),
+        'supervisor_notified': _val(_supervisorReportedToController),
+        'date_reported': _dateReported != null ? DateFormat('yyyy-MM-dd').format(_dateReported!) : null,
+        'time_reported': _timeReported != null ? '${_timeReported!.hour.toString().padLeft(2, '0')}:${_timeReported!.minute.toString().padLeft(2, '0')}:00' : null,
+        'workers': _val(_workersController),
+        'clients': _val(_clientsController),
+        'others': _val(_othersController),
+        'withness_name': _val(_witnessNameController),
+        'witness_job_title': _val(_witnessTitleController),
+        'witness_contact': _val(_witnessContactController),
+        'witness_statement': _val(_whatStatedController),
+        'personal_observation': _val(_personalObservationController),
+        'injuries': _val(_injuryDetailsController),
+        'reporter_signature': _uploadedSignatureUrl != null ? {'url': _uploadedSignatureUrl} : null,
         'created_at': DateTime.now().toIso8601String(),
       };
 
@@ -279,10 +248,9 @@ Who Informed: ${_whoInformedController.text.trim()}
 
       // Send email notification
       final emailSent = await EmailService.sendIncidentReportEmail(
-        incidentDate: DateFormat('yyyy-MM-dd').format(_incidentDate!),
-        incidentTime:
-            '${_incidentTime!.hour.toString().padLeft(2, '0')}:${_incidentTime!.minute.toString().padLeft(2, '0')}',
-        location: _locationController.text.trim(),
+        incidentDate: _incidentDate != null ? DateFormat('yyyy-MM-dd').format(_incidentDate!) : 'N/A',
+        incidentTime: _incidentTime != null ? '${_incidentTime!.hour.toString().padLeft(2, '0')}:${_incidentTime!.minute.toString().padLeft(2, '0')}' : 'N/A',
+        location: _val(_locationController),
         description: _incidentDescriptionController.text
             .trim(), // Send cleaner main description to email, extras in separate args
         sequenceOfEvents: _sequenceController.text.trim(),
@@ -309,9 +277,9 @@ Who Informed: ${_whoInformedController.text.trim()}
         whoReported: _whoReportedController.text.trim(),
         whatStated: _whatStatedController.text.trim(),
         personalObs: _personalObservationController.text.trim(),
-        painDiscomfort: _painDiscomfortController.text.trim(),
+        painDiscomfort: _painExpressed ? 'Yes' : 'No',
         injuryDetails: _injuryDetailsController.text.trim(),
-        hazards: _environmentalHazardsController.text.trim(),
+        hazards: _environmentalHazards ? 'Yes' : 'No',
         whoInformed: _whoInformedController.text.trim(),
         signatureUrl: _uploadedSignatureUrl,
         signatureImage: _signatureImage,
@@ -353,12 +321,10 @@ Who Informed: ${_whoInformedController.text.trim()}
     _whatStatedController.clear();
     _personalObservationController.clear();
     _sequenceController.clear();
-    _painDiscomfortController.clear();
     _clientConditionController.clear();
     _immediateActionsController.clear();
     _whoInformedController.clear();
     _injuryDetailsController.clear();
-    _environmentalHazardsController.clear();
     _signatureController.clear();
     setState(() {
       _incidentDate = null;
@@ -366,6 +332,8 @@ Who Informed: ${_whoInformedController.text.trim()}
       _dateReported = null;
       _timeReported = null;
       _medicalAttentionRequired = false;
+      _painExpressed = false;
+      _environmentalHazards = false;
       _signatureImage = null;
       _uploadedSignatureUrl = null;
     });
@@ -512,9 +480,13 @@ Who Informed: ${_whoInformedController.text.trim()}
           const Divider(),
           const SizedBox(height: 8),
 
-          _buildTextField(
-              controller: _painDiscomfortController,
-              label: 'Did the client express pain/discomfort?'),
+          CheckboxListTile(
+            title: const Text('Did the client express pain/discomfort?'),
+            value: _painExpressed,
+            onChanged: (val) => setState(() => _painExpressed = val ?? false),
+            controlAffinity: ListTileControlAffinity.leading,
+            contentPadding: EdgeInsets.zero,
+          ),
           const SizedBox(height: 12),
           _buildTextField(
               controller: _clientConditionController,
@@ -537,9 +509,13 @@ Who Informed: ${_whoInformedController.text.trim()}
                 maxLines: 2),
 
           const SizedBox(height: 12),
-          _buildTextField(
-              controller: _environmentalHazardsController,
-              label: 'Were there environmental hazards present?'),
+          CheckboxListTile(
+            title: const Text('Were there environmental hazards present?'),
+            value: _environmentalHazards,
+            onChanged: (val) => setState(() => _environmentalHazards = val ?? false),
+            controlAffinity: ListTileControlAffinity.leading,
+            contentPadding: EdgeInsets.zero,
+          ),
           const SizedBox(height: 12),
           _buildTextField(
               controller: _immediateActionsController,
@@ -691,7 +667,6 @@ Who Informed: ${_whoInformedController.text.trim()}
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,
-    String? validatorMsg,
     int maxLines = 1,
     bool required = true,
     IconData? icon,
@@ -706,14 +681,7 @@ Who Informed: ${_whoInformedController.text.trim()}
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       ),
-      validator: required
-          ? (value) {
-              if (value == null || value.trim().isEmpty) {
-                return validatorMsg ?? 'Required';
-              }
-              return null;
-            }
-          : null,
+      validator: null, // Removed validation requirement
     );
   }
 }

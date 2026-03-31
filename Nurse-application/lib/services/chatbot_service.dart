@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'package:mailer/mailer.dart';
 import 'package:mailer/smtp_server/gmail.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -97,12 +96,9 @@ class ChatbotResponse {
 }
 
 class ChatbotService {
-  static const String supabaseUrl = 'https://asbfhxdomvclwsrekdxi.supabase.co';
   static const String edgeFunctionName = 'chatbot-handle-request';
 
   static final _client = Supabase.instance.client;
-
-  static const _anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...';
 
   // ---------------------------------------------------------------------------
   // 1) FRONTEND-SIDE INTENT DETECTION
@@ -268,10 +264,9 @@ class ChatbotService {
     String? signatureUrl,
     String? leaveStartDate,
     String? leaveEndDate,
+    String? leaveType,
   }) async {
     try {
-      const url = "$supabaseUrl/functions/v1/$edgeFunctionName";
-
       final body = {
         "emp_id": empId,
         "message": message,
@@ -281,27 +276,24 @@ class ChatbotService {
         if (signatureUrl != null) "signature_url": signatureUrl,
         if (leaveStartDate != null) "leave_start_date": leaveStartDate,
         if (leaveEndDate != null) "leave_end_date": leaveEndDate,
+        if (leaveType != null) "leave_type": leaveType,
       };
 
-      final res = await http.post(
-        Uri.parse(url),
-        headers: {
-          "Content-Type": "application/json",
-          "apikey": _anonKey,
-          "Authorization": "Bearer $_anonKey",
-        },
-        body: jsonEncode(body),
+      // Use Supabase client's functions.invoke — automatically handles auth
+      final res = await _client.functions.invoke(
+        edgeFunctionName,
+        body: body,
       );
 
-      // Debugging logs
-      print("STATUS: ${res.statusCode}");
-      print("BODY: ${res.body}");
+      debugPrint('Edge fn status: ${res.status}');
+      debugPrint('Edge fn data: ${res.data}');
 
-      if (res.statusCode == 200) {
-        return ChatbotResponse.fromJson(jsonDecode(res.body));
+      if (res.status == 200) {
+        final data = res.data is String ? jsonDecode(res.data) : res.data;
+        return ChatbotResponse.fromJson(data as Map<String, dynamic>);
       }
 
-      return ChatbotResponse(ok: false, error: res.body);
+      return ChatbotResponse(ok: false, error: res.data?.toString());
     } catch (e) {
       return ChatbotResponse(ok: false, error: e.toString());
     }
@@ -318,11 +310,18 @@ class ChatbotService {
     String? leaveEndDate,
     String? startTime,
     String? endTime,
+    String? leaveType,
+    String? intentOverride,
   }) async {
     if (empId == null) return "Please log in first.";
 
-    final parsed = detectIntent(message);
-    final intentCode = intentToCode(parsed.type);
+    String intentCode;
+    if (intentOverride != null) {
+      intentCode = intentOverride;
+    } else {
+      final parsed = detectIntent(message);
+      intentCode = intentToCode(parsed.type);
+    }
 
     final response = await _sendToSupabase(
       empId: empId,
@@ -333,6 +332,7 @@ class ChatbotService {
       leaveEndDate: leaveEndDate,
       startTime: startTime,
       endTime: endTime,
+      leaveType: leaveType,
     );
 
     if (response.ok) {
