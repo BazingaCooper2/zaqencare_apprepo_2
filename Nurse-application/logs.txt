@@ -1,0 +1,295 @@
+Launching lib\main.dart on sdk gphone64 x86 64 in debug mode...
+Running Gradle task 'assembleDebug'...                             14.1s
+√ Built build\app\outputs\flutter-apk\app-debug.apk
+Installing build\app\outputs\flutter-apk\app-debug.apk...        2,753ms
+D/FlutterJNI( 7784): Beginning load of flutter...
+D/FlutterJNI( 7784): flutter (null) was loaded normally!
+I/flutter ( 7784): [IMPORTANT:flutter/shell/platform/android/android_context_gl_impeller.cc(104)] Using the Impeller rendering backend (OpenGLES).
+D/FlutterGeolocator( 7784): Attaching Geolocator to activity
+I/flutter ( 7784): 🏁 Starting Initialization...
+Syncing files to device sdk gphone64 x86 64...                  
+D/FlutterGeolocator( 7784): Creating service.
+D/FlutterGeolocator( 7784): Binding to location service.
+I/WindowExtensionsImpl( 7784): Initializing Window Extensions, vendor API level=9, activity embedding enabled=true
+Syncing files to device sdk gphone64 x86 64...                     303ms
+
+Flutter run key commands.
+r Hot reload. 
+R Hot restart.
+h List all available interactive commands.
+d Detach (terminate "flutter run" but leave application running).
+c Clear the screen
+q Quit (terminate the application on the device).
+
+A Dart VM Service on sdk gphone64 x86 64 is available at: http://127.0.0.1:51706/JqthfE2K8QU=/
+I/ursetracker.app( 7784): Compiler allocated 5042KB to compile void android.view.ViewRootImpl.performTraversals()
+D/FlutterGeolocator( 7784): Geolocator foreground service connected
+D/FlutterGeolocator( 7784): Initializing Geolocator services
+D/FlutterGeolocator( 7784): Flutter engine connected. Connected engine count 1
+I/Choreographer( 7784): Skipped 49 frames!  The application may be doing too much work on its main thread.
+The Flutter DevTools debugger and profiler on sdk gphone64 x86 64 is available at: http://127.0.0.1:9101?uri=http://127.0.0.1:51706/JqthfE2K8QU=/
+I/flutter ( 7784):  Firebase initialized
+I/flutter ( 7784): supabase.supabase_flutter: INFO: ***** Supabase init completed ***** 
+I/flutter ( 7784): ⚡ Supabase initialized
+I/flutter ( 7784): APP START AUTH SESSION: null
+D/WindowLayoutComponentImpl( 7784): Register WindowLayoutInfoListener on Context=com.nursetracker.app.MainActivity@8d4f287, of which baseContext=android.app.ContextImpl@d9a70d5
+W/FlutterJNI( 7784): FlutterJNI.loadLibrary called more than once
+D/FlutterJNI( 7784): Beginning load of flutter...
+I/ResourceExtractor( 7784): Found extracted resources res_timestamp-6-1775047418662
+D/FlutterJNI( 7784): flutter (null) was loaded normally!
+W/FlutterJNI( 7784): FlutterJNI.prefetchDefaultFontManager called more than once
+I/flutter ( 7784): 🔔 Notifications initialized
+W/FlutterJNI( 7784): FlutterJNI.init called more than once
+I/FLTFireBGExecutor( 7784): Creating background FlutterEngine instance, with args: [--enable-dart-profiling]
+I/flutter ( 7784): [IMPORTANT:flutter/shell/platform/android/android_context_gl_impeller.cc(104)] Using the Impeller rendering backend (OpenGLES).
+D/FlutterGeolocator( 7784): Geolocator foreground service connected
+D/FlutterGeolocator( 7784): Initializing Geolocator services
+D/FlutterGeolocator( 7784): Flutter engine connected. Connected engine count 2
+I/FLTFireMsgService( 7784): FlutterFirebaseMessagingBackgroundService started!
+I/flutter ( 7784): ✅ FCM Token: cvISW5FxQJCQz6uuu119Be:APA91bEgaP_xn8Hyt4XjyiSSWmB48WY4TXh9pqqyJDQBetzhJZPowpuAktOQ4Jfy8BRe6xdkp9nLhmQSqkrfXYLZvaynyrlY59uLUq0vAEEq3LT4vZCmA-w
+I/flutter ( 7784): 📱 FCM Token received
+D/InsetsController( 7784): hide(ime(), fromIme=false)
+I/ImeTracker( 7784): com.nursetracker.app:68e220fd: onCancelled at PHASE_CLIENT_ALREADY_HIDDEN
+W/WindowOnBackDispatcher( 7784): sendCancelIfRunning: isInProgress=false callback=io.flutter.embedding.android.FlutterActivity$1@10ab333
+I/flutter ( 7784): 🚀 Initializing ShiftOfferManager for employee 10
+I/flutter ( 7784): 📥 Loading pending offers...
+I/flutter ( 7784): 📥 Fetching pending offers for employee 10 with filter
+I/flutter ( 7784): 🔍 Raw PENDING response length: 0
+I/flutter ( 7784): ✅ Fetched 0 pending enriched offers
+I/flutter ( 7784): ✅ ShiftOfferManager initialized
+I/flutter ( 7784): ✅ Shift offer system initialized for employee 10
+D/ProfileInstaller( 7784): Installing profile for com.nursetracker.app
+I/flutter ( 7784): ✅ Subscribed to shift offers for emp 10
+I/flutter ( 7784): 🎨 Redrawing TimeTrackingScreen (activeShift: null, todayShifts: 0, loading: false)
+D/MapsInitializer( 7784): preferredRenderer: null
+D/zzcc    ( 7784): preferredRenderer: null
+I/zzcc    ( 7784): Making Creator dynamically
+I/DynamiteModule( 7784): Considering local module com.google.android.gms.maps_core_dynamite:0 and remote module com.google.android.gms.maps_core_dynamite:254515602
+I/DynamiteModule( 7784): Selected remote version of com.google.android.gms.maps_core_dynamite, version >= 254515602
+V/DynamiteModule( 7784): Dynamite loader version >= 2, using loadModule2NoCrashUtils
+I/ursetracker.app( 7784): AssetManager2(0x762fbc339fb8) locale list changing from [] to [en-US]
+I/ursetracker.app( 7784): AssetManager2(0x762fbc33b598) locale list changing from [] to [en-US]
+D/zzcc    ( 7784): early loading native code
+W/NativeHelper( 7784): Loading native library 'gmm-jni' on thread main
+D/nativeloader( 7784): Configuring clns-11 for other apk . target_sdk_version=36, uses_libraries=ALL, library_path=/data/user_de/0/com.google.android.gms/app_chimera/m/00000015/dl-MapsCoreDynamite.integ_254515602100800.apk!/lib/x86_64:/data/user_de/0/com.google.android.gms/app_chimera/m/00000015/dl-MapsCoreDynamite.integ_254515602100800.apk!/lib/arm64-v8a, permitted_path=/data:/mnt/expand
+D/nativeloader( 7784): Load /data/user_de/0/com.google.android.gms/app_chimera/m/00000015/dl-MapsCoreDynamite.integ_254515602100800.apk!/lib/x86_64/libgmm-jni.so using isolated ns clns-11 (caller=/data/user_de/0/com.google.android.gms/app_chimera/m/00000015/dl-MapsCoreDynamite.integ_254515602100800.apk): ok
+I/native  ( 7784): I0000 00:00:1775047448.781879    7784 jni_init.cc:30] Initializing JNI...
+I/NativeHelper( 7784): JNI initialized.
+I/Google Android Maps SDK( 7784): Google Play services client version: 19020000
+D/bo      ( 7784): SDK type: 1, version: 254515602
+D/hp      ( 7784): maps_core_dynamite module version in use (0 represents standalone library): 254515602
+D/hp      ( 7784): Added event: 109
+D/hp      ( 7784): Added event: 112
+D/MapsInitializer( 7784): loadedRenderer: LATEST
+D/zzcc    ( 7784): preferredRenderer: null
+D/bo      ( 7784): SDK type: 1, version: 254515602
+I/Google Android Maps SDK( 7784): Google Play services package version: 261133038
+I/Google Android Maps SDK( 7784): Google Play services maps renderer version(maps_core): 254515602
+D/bo      ( 7784): SDK type: 1, version: 254515602
+D/de      ( 7784): about to start loading native library asynchronously
+W/y       ( 7784): Suppressed StrictMode policy violation: StrictModeDiskReadViolation
+I/o       ( 7784): Using GMM server: https://clients4.google.com/glm/mmap
+W/y       ( 7784): Suppressed StrictMode policy violation: StrictModeDiskReadViolation
+W/y       ( 7784): Suppressed StrictMode policy violation: StrictModeDiskWriteViolation
+W/y       ( 7784): Suppressed StrictMode policy violation: StrictModeDiskReadViolation
+D/o       ( 7784): Using Non-null serverVersionMetadataManager to load previous metadata.
+D/o       ( 7784): Previous session server version metadata loaded: CggIBhCH2qnOBgoICAEQ/o6rzgYKCAgDEIPJqs4GCgoIBBD47I3OBhgB
+W/HWUI    ( 7784): Image decoding logging dropped!
+I/m140.box( 7784): getExecutor  CREATED  bon@dee250b[main]
+I/m140.box( 7784): getExecutor  CREATED  ScheduledThreadPoolExecutor@9f76ca6[Scheduler]
+I/m140.box( 7784): getExecutor  CREATED  boq@fd806e7[Lite]
+I/m140.box( 7784): getExecutor  CREATED  boq@3cbe13d[Background]
+I/m140.box( 7784): getExecutor  CREATED  boq@b79b08a[Blocking]
+I/m140.cah( 7784): marker files=[]
+I/m140.box( 7784): getExecutor  CREATED  boq@45bbda9[TilePrep]
+I/m140.bna( 7784): Loaded cached client parameters
+I/ClientParamsBlocking( 7784): ClientParametersBlockingReference.blockedOnMainThread: ENABLE_FEATURES for 54 ms.
+I/ClientParamsBlocking( 7784): java.lang.Throwable
+I/ClientParamsBlocking( 7784): 	at m140.bgt.m(:com.google.android.gms.policy_maps_core_dynamite@254515607@254515602032.843324832.843324832:179)
+I/ClientParamsBlocking( 7784): 	at m140.bgt.a(:com.google.android.gms.policy_maps_core_dynamite@254515607@254515602032.843324832.843324832:1)
+I/ClientParamsBlocking( 7784): 	at m140.ben.a(:com.google.android.gms.policy_maps_core_dynamite@254515607@254515602032.843324832.843324832:3)
+I/ClientParamsBlocking( 7784): 	at m140.big.b(:com.google.android.gms.policy_maps_core_dynamite@254515607@254515602032.843324832.843324832:9)
+I/ClientParamsBlocking( 7784): 	at m140.ebh.a(:com.google.android.gms.policy_maps_core_dynamite@254515607@254515602032.843324832.843324832:147)
+I/ClientParamsBlocking( 7784): 	at m140.jic.d(:com.google.android.gms.policy_maps_core_dynamite@254515607@254515602032.843324832.843324832:12)
+I/ClientParamsBlocking( 7784): 	at m140.jic.a(:com.google.android.gms.policy_maps_core_dynamite@254515607@254515602032.843324832.843324832:7)
+I/ClientParamsBlocking( 7784): 	at m140.dzb.<init>(:com.google.android.gms.policy_maps_core_dynamite@254515607@254515602032.843324832.843324832:43)
+I/ClientParamsBlocking( 7784): 	at m140.dzc.a(:com.google.android.gms.policy_maps_core_dynamite@254515607@254515602032.843324832.843324832:72)
+I/ClientParamsBlocking( 7784): 	at m140.jic.d(:com.google.android.gms.policy_maps_core_dynamite@254515607@254515602032.843324832.843324832:12)
+I/ClientParamsBlocking( 7784): 	at m140.jic.a(:com.google.android.gms.policy_maps_core_dynamite@254515607@254515602032.843324832.843324832:7)
+I/ClientParamsBlocking( 7784): 	at com.google.maps.api.android.lib6.phoenix.bg.a(:com.google.android.gms.policy_maps_core_dynamite@254515607@254515602032.843324832.843324832:5)
+I/ClientParamsBlocking( 7784): 	at m140.jic.d(:com.google.android.gms.policy_maps_core_dynamite@254515607@254515602032.843324832.843324832:12)
+I/ClientParamsBlocking( 7784): 	at m140.jic.a(:com.google.android.gms.policy_maps_core_dynamite@254515607@254515602032.843324832.843324832:7)
+I/ClientParamsBlocking( 7784): 	at com.google.maps.api.android.lib6.phoenix.be.a(:com.google.android.gms.policy_maps_core_dynamite@254515607@254515602032.843324832.843324832:3)
+I/ClientParamsBlocking( 7784): 	at m140.jic.d(:com.google.android.gms.policy_maps_core_dynamite@254515607@254515602032.843324832.843324832:12)
+I/ClientParamsBlocking( 7784): 	at m140.jic.a(:com.google.android.gms.policy_maps_core_dynamite@254515607@254515602032.843324832.843324832:7)
+I/ClientParamsBlocking( 7784): 	at com.google.maps.api.android.lib6.phoenix.bj.a(:com.google.android.gms.policy_maps_core_dynamite@254515607@254515602032.843324832.843324832:3)
+I/ClientParamsBlocking( 7784): 	at m140.jic.d(:com.google.android.gms.policy_maps_core_dynamite@254515607@254515602032.843324832.843324832:12)
+I/ClientParamsBlocking( 7784): 	at m140.jic.a(:com.google.android.gms.policy_maps_core_dynamite@254515607@254515602032.843324832.843324832:7)
+I/ClientParamsBlocking( 7784): 	at com.google.maps.api.android.lib6.impl.cg.aY(:com.google.android.gms.policy_maps_core_dynamite@254515607@254515602032.843324832.843324832:67)
+I/ClientParamsBlocking( 7784): 	at com.google.maps.api.android.lib6.impl.em.d(:com.google.android.gms.policy_maps_core_dynamite@254515607@254515602032.843324832.843324832:12)
+I/ClientParamsBlocking( 7784): 	at com.google.android.gms.maps.internal.r.bt(:com.google.android.gms.policy_maps_core_dynamite@254515607@254515602032.843324832.843324832:158)
+I/ClientParamsBlocking( 7784): 	at m140.ayi.onTransact(:com.google.android.gms.policy_maps_core_dynamite@254515607@254515602032.843324832.843324832:21)
+I/ClientParamsBlocking( 7784): 	at android.os.Binder.transact(Binder.java:1273)
+I/ClientParamsBlocking( 7784): 	at com.google.android.gms.internal.maps.zza.zzc(com.google.android.gms:play-services-maps@@19.2.0:2)
+I/ClientParamsBlocking( 7784): 	at com.google.android.gms.maps.internal.zzl.onCreate(com.google.android.gms:play-services-maps@@19.2.0:3)
+I/ClientParamsBlocking( 7784): 	at com.google.android.gms.maps.zzah.onCreate(com.google.android.gms:play-services-maps@@19.2.0:3)
+I/ClientParamsBlocking( 7784): 	at com.google.android.gms.dynamic.zac.zab(com.google.android.gms:play-services-base@@18.4.0:1)
+I/ClientParamsBlocking( 7784): 	at com.google.android.gms.dynamic.zaa.onDelegateCreated(com.google.android.gms:play-services-base@@18.4.0:3)
+I/ClientParamsBlocking( 7784): 	at com.google.android.gms.maps.zzai.zzb(com.google.android.gms:play-services-maps@@19.2.0:5)
+I/ClientParamsBlocking( 7784): 	at com.google.android.gms.maps.zzai.createDelegate(com.google.android.gms:play-services-maps@@19.2.0:1)
+I/ClientParamsBlocking( 7784): 	at com.google.android.gms.dynamic.DeferredLifecycleHelper.zaf(com.google.android.gms:play-services-base@@18.4.0:6)
+I/ClientParamsBlocking( 7784): 	at com.google.android.gms.dynamic.DeferredLifecycleHelper.onCreate(com.google.android.gms:play-services-base@@18.4.0:1)
+I/ClientParamsBlocking( 7784): 	at com.google.android.gms.maps.MapView.onCreate(com.google.android.gms:play-services-maps@@19.2.0:4)
+I/ClientParamsBlocking( 7784): 	at io.flutter.plugins.googlemaps.GoogleMapController.onCreate(GoogleMapController.java:462)
+I/ClientParamsBlocking( 7784): 	at androidx.lifecycle.DefaultLifecycleObserverAdapter.onStateChanged(DefaultLifecycleObserverAdapter.kt:24)
+I/ClientParamsBlocking( 7784): 	at androidx.lifecycle.LifecycleRegistry$ObserverWithState.dispatchEvent(LifecycleRegistry.kt:322)
+I/ClientParamsBlocking( 7784): 	at androidx.lifecycle.LifecycleRegistry.addObserver(LifecycleRegistry.kt:199)
+I/ClientParamsBlocking( 7784): 	at io.flutter.plugins.googlemaps.GoogleMapController.init(GoogleMapController.java:193)
+I/ClientParamsBlocking( 7784): 	at io.flutter.plugins.googlemaps.GoogleMapBuilder.build(GoogleMapBuilder.java:43)
+I/ClientParamsBlocking( 7784): 	at io.flutter.plugins.googlemaps.GoogleMapFactory.create(GoogleMapFactory.java:56)
+I/ClientParamsBlocking( 7784): 	at io.flutter.plugin.platform.PlatformViewsController.createPlatformView(PlatformViewsController.java:530)
+I/ClientParamsBlocking( 7784): 	at io.flutter.plugin.platform.PlatformViewsController$1.createForTextureLayer(PlatformViewsController.java:202)
+I/ClientParamsBlocking( 7784): 	at io.flutter.embedding.engine.systemchannels.PlatformViewsChannel$1.create(PlatformViewsChannel.java:128)
+I/ClientParamsBlocking( 7784): 	at io.flutter.embedding.engine.systemchannels.PlatformViewsChannel$1.onMethodCall(PlatformViewsChannel.java:55)
+I/ClientParamsBlocking( 7784): 	at io.flutter.plugin.common.MethodChannel$IncomingMethodCallHandler.onMessage(MethodChannel.java:267)
+I/ClientParamsBlocking( 7784): 	at io.flutter.embedding.engine.dart.DartMessenger.invokeHandler(DartMessenger.java:292)
+I/ClientParamsBlocking( 7784): 	at io.flutter.embedding.engine.dart.DartMessenger.lambda$dispatchMessageToQueue$0$io-flutter-embedding-engine-dart-DartMessenger(DartMessenger.java:319)
+I/ClientParamsBlocking( 7784): 	at io.flutter.embedding.engine.dart.DartMessenger$$ExternalSyntheticLambda0.run(D8$$SyntheticClass:0)
+I/ClientParamsBlocking( 7784): 	at android.os.Handler.handleCallback(Handler.java:995)
+I/ClientParamsBlocking( 7784): 	at android.os.Handler.dispatchMessage(Handler.java:103)
+I/ClientParamsBlocking( 7784): 	at android.os.Looper.loopOnce(Looper.java:248)
+I/ClientParamsBlocking( 7784): 	at android.os.Looper.loop(Looper.java:338)
+I/ClientParamsBlocking( 7784): 	at android.app.ActivityThread.main(ActivityThread.java:9067)
+I/ClientParamsBlocking( 7784): 	at java.lang.reflect.Method.invoke(Native Method)
+I/ClientParamsBlocking( 7784): 	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:593)
+I/ClientParamsBlocking( 7784): 	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:932)
+I/m140.bnn( 7784): finishInitialization ClientParametersManager.
+I/m140.bml( 7784): start()  account=Account {name=signedout@, type=com.google.android.apps.maps}  locale=en_US
+I/m140.bml( 7784): P/H: Scheduling next update in 17541.409000 seconds: initial refresh (forced by: NOT FORCED)
+I/m140.cek( 7784): FpsProfiler MAIN created on main
+I/m140.box( 7784): getExecutor  CREATED  boq@3fe971f[Picker]
+I/m140.epd( 7784): Found 47 zoom mappings
+I/m140.epd( 7784): Zoom tables loaded
+W/m140.ffb( 7784): No current context - attempting to create off-screen context
+I/m140.ffb( 7784): Created GlConstants: ffa{gpuVendor=Google (NVIDIA Corporation), glVersion=OpenGL ES 3.1 (4.5.0 NVIDIA 581.83), glRenderer=Android Emulator OpenGL ES Translator (NVIDIA GeForce RTX 4050 Laptop GPU/PCIe/SSE2), maxTextureSize=32768, maxVertexTextureImageUnits=32, maxVertexUniformVectors=1024, maxSupportedLineWidth=10, maxVertexAttribs=16, nonPowerOfTwoTextureSupport=FULL}
+I/m140.dvj( 7784): Map using legacy labeler
+I/m140.ewn( 7784): Create or open database: /storage/emulated/0/Android/data/com.nursetracker.app/cache/diskcache; secure file path: /data/user/0/com.nursetracker.app/app_/testdata
+I/m140.duc( 7784): Network fetching: false
+I/m140.euz( 7784): Current epoch is now 773
+I/m140.duc( 7784): requestDrawingConfig for epoch 773 legend ROADMAP
+I/m140.fiz( 7784): Model SDK_GPHONE64_X86_64, Product name SDK_GPHONE64_X86_64, Board name GOLDFISH_X86_64, Manufacturer GOOGLE
+W/m140.fiz( 7784): Model is not recognized, and therefore using default settings.
+I/m140.ewr( 7784): Database cache size: 1843200 bytes
+I/m140.duc( 7784): Network fetching: true
+I/m140.ewr( 7784): Deleted 0 entries from the disk cache in 6 ms
+I/m140.ewr( 7784): Deleting expired tiles and resources took 6 ms
+I/m140.epd( 7784): Found 47 zoom mappings
+I/m140.epd( 7784): Zoom tables loaded
+I/m140.duc( 7784): requestDrawingConfig for epoch 773 legend ROADMAP
+W/HWUI    ( 7784): Image decoding logging dropped!
+I/m140.duc( 7784): requestDrawingConfig for epoch 773 legend ROADMAP
+I/m140.euu( 7784): styleTableCache inserted: 773 ROADMAP https://www.gstatic.com/maps/res/CompactLegend-Roadmap-EnhancedNavStyleHoldbackForGeoD-2ef7e2e9acd41a529bba0ed852142813
+I/m140.duc( 7784): requestDrawingConfig for epoch 773 legend ROADMAP
+I/PlatformViewsController( 7784): Hosting view in view hierarchy for platform view: 0
+I/PlatformViewsController( 7784): PlatformView is using SurfaceProducer backend
+W/ursetracker.app( 7784): Suspending all threads took: 5.760ms
+W/ursetracker.app( 7784): JNI critical lock held for 19.490ms on Thread[71,tid=7921,Runnable,Thread*=0x76303c430580,peer=0x249ab58,"androidmapsapi-TilePrep_1"]
+I/ursetracker.app( 7784): Background concurrent mark compact GC freed 1973KB AllocSpace bytes, 9(852KB) LOS objects, 49% free, 10MB/20MB, paused 8.195ms,3.065ms total 66.153ms
+I/flutter ( 7784): 🔐 Current location permission: LocationPermission.whileInUse
+I/flutter ( 7784): ✅ Location permission granted: LocationPermission.whileInUse
+I/m140.duc( 7784): Network fetching: true
+I/m140.duc( 7784): Network fetching: true
+I/m140.duc( 7784): Network fetching: true
+I/m140.duc( 7784): Network fetching: true
+I/m140.duc( 7784): Network fetching: true
+I/GoogleMapController( 7784): Installing custom TextureView driven invalidator.
+E/FlutterGeolocator( 7784): Geolocator position updates started
+I/m140.epd( 7784): Found 47 zoom mappings
+I/m140.epd( 7784): Zoom tables loaded
+I/flutter ( 7784): 🎨 Redrawing TimeTrackingScreen (activeShift: null, todayShifts: 0, loading: true)
+W/HWUI    ( 7784): Image decoding logging dropped!
+I/flutter ( 7784):  RPC get_active_shift returned: null
+I/flutter ( 7784): 🚨 Fetching shifts for emp_id=10
+W/HWUI    ( 7784): Image decoding logging dropped!
+W/HWUI    ( 7784): Image decoding logging dropped!
+W/HWUI    ( 7784): Image decoding logging dropped!
+W/DynamiteModule( 7784): Local module descriptor class for com.google.android.gms.googlecertificates not found.
+W/HWUI    ( 7784): Image decoding logging dropped!
+I/DynamiteModule( 7784): Considering local module com.google.android.gms.googlecertificates:0 and remote module com.google.android.gms.googlecertificates:7
+I/DynamiteModule( 7784): Selected remote version of com.google.android.gms.googlecertificates, version >= 7
+W/Choreographer( 7784): Frame time is 1.177421 ms in the future!  Check that graphics HAL is generating vsync timestamps using the correct timebase.
+W/HWUI    ( 7784): Image decoding logging dropped!
+W/HWUI    ( 7784): Image decoding logging dropped!
+W/ursetracker.app( 7784): ClassLoaderContext classpath element checksum mismatch. expected=2941841013, found=1679574126 (DLC[];PCL[base.apk*2941841013]{PCL[/system/framework/org.apache.http.legacy.jar*4247870504]#PCL[/system/framework/com.android.location.provider.jar*1570284764]#PCL[/system/framework/com.android.media.remotedisplay.jar*487574312]#PCL[/system_ext/framework/com.android.extensions.appfunctions.jar*2880224042]#PCL[/system_ext/framework/androidx.window.extensions.jar*1030441313]#PCL[/system_ext/framework/androidx.window.sidecar.jar*3860983653]} | DLC[];PCL[/data/app/~~GtNGWJER9_0jF-QPeOvuSA==/com.nursetracker.app-MTMrSzOHsJYSgjxpJ9B3Nw==/base.apk*1679574126]{PCL[/system/framework/org.apache.http.legacy.jar*4247870504]#PCL[/system_ext/framework/androidx.window.extensions.jar*1030441313]#PCL[/system_ext/framework/androidx.window.sidecar.jar*3860983653]})
+W/HWUI    ( 7784): Image decoding logging dropped!
+I/ursetracker.app( 7784): AssetManager2(0x762fbc3409f8) locale list changing from [] to [en-US]
+I/ursetracker.app( 7784): AssetManager2(0x762fbc341998) locale list changing from [] to [en-US]
+W/HWUI    ( 7784): Image decoding logging dropped!
+W/Choreographer( 7784): Frame time is 0.422618 ms in the future!  Check that graphics HAL is generating vsync timestamps using the correct timebase.
+W/HWUI    ( 7784): Image decoding logging dropped!
+W/HWUI    ( 7784): Image decoding logging dropped!
+W/ImageReader_JNI( 7784): Unable to acquire a buffer item, very likely client tried to acquire more than maxImages buffers
+W/HWUI    ( 7784): Image decoding logging dropped!
+I/flutter ( 7784): ❌ Error fetching shifts in TimeTrackingPage: PostgrestException(message: Could not find a relationship between 'shift' and 'client' in the schema cache, code: PGRST200, details: Searched for a foreign key relationship between 'shift' and 'client' in the schema 'public', but no matches were found., hint: Perhaps you meant 'client_final' instead of 'client'.)
+I/flutter ( 7784): 🎨 Redrawing TimeTrackingScreen (activeShift: null, todayShifts: 0, loading: false)
+I/ursetracker.app( 7784): Compiler allocated 6631KB to compile void m140.ekm.W(m140.epa, m140.fiw, android.content.res.Resources, m140.emr, m140.exp, boolean, m140.dkr, java.util.Map, boolean, boolean, boolean, boolean, boolean)
+W/HWUI    ( 7784): Image decoding logging dropped!
+W/HWUI    ( 7784): Image decoding logging dropped!
+W/HWUI    ( 7784): Image decoding logging dropped!
+W/Choreographer( 7784): Frame time is 0.208363 ms in the future!  Check that graphics HAL is generating vsync timestamps using the correct timebase.
+W/HWUI    ( 7784): Image decoding logging dropped!
+W/HWUI    ( 7784): Image decoding logging dropped!
+I/m140.caw( 7784): Initial labeling completed.
+I/ursetracker.app( 7784): Compiler allocated 5578KB to compile void m140.esk.o()
+W/m140.dvr( 7784): InternalStyle with id -1 not found in namespace: [GMM-CLIENT-INJECTED-STYLE-NAMESPACE, 1]. Has this style been destroyed?
+W/m140.dvr( 7784): InternalStyle with id -1 not found in namespace: [GMM-CLIENT-INJECTED-STYLE-NAMESPACE, 1]. Has this style been destroyed?
+W/m140.dvr( 7784): InternalStyle with id -1 not found in namespace: [GMM-CLIENT-INJECTED-STYLE-NAMESPACE, 1]. Has this style been destroyed?
+I/ursetracker.app( 7784): Compiler allocated 4424KB to compile void m140.efl.c(m140.dlg, m140.eed, m140.egg, m140.end, boolean)
+W/HWUI    ( 7784): Image decoding logging dropped!
+W/HWUI    ( 7784): Image decoding logging dropped!
+I/flutter ( 7784): 📍 Location stream: 37.4219983, -122.084 (accuracy: 5.0m)
+I/flutter ( 7784): 🎨 Redrawing TimeTrackingScreen (activeShift: null, todayShifts: 0, loading: false)
+W/m140.dpe( 7784): ClientArea created with texture coordinates, but has a non-textured style.
+W/m140.dfg( 7784): ScreenPixelGeometryUnpacker int[] getVertices not supported; float-precision would be lost.
+W/HWUI    ( 7784): Image decoding logging dropped!
+I/flutter ( 7784): 🎯 Centered map on user location
+I/flutter ( 7784): 🎨 Redrawing TimeTrackingScreen (activeShift: null, todayShifts: 0, loading: false)
+W/HWUI    ( 7784): Image decoding logging dropped!
+W/HWUI    ( 7784): Image decoding logging dropped!
+W/WindowOnBackDispatcher( 7784): sendCancelIfRunning: isInProgress=false callback=io.flutter.embedding.android.FlutterActivity$1@10ab333
+W/ImageReader_JNI( 7784): Unable to acquire a buffer item, very likely client tried to acquire more than maxImages buffers
+W/ImageReader_JNI( 7784): Unable to acquire a buffer item, very likely client tried to acquire more than maxImages buffers
+W/ImageReader_JNI( 7784): Unable to acquire a buffer item, very likely client tried to acquire more than maxImages buffers
+W/ImageReader_JNI( 7784): Unable to acquire a buffer item, very likely client tried to acquire more than maxImages buffers
+W/Choreographer( 7784): Frame time is 0.409575 ms in the future!  Check that graphics HAL is generating vsync timestamps using the correct timebase.
+W/ImageReader_JNI( 7784): Unable to acquire a buffer item, very likely client tried to acquire more than maxImages buffers
+W/ImageReader_JNI( 7784): Unable to acquire a buffer item, very likely client tried to acquire more than maxImages buffers
+W/m140.few( 7784): Destroying egl surface
+D/Google Android Maps SDK( 7784): For capability in capabilities, log:
+D/Google Android Maps SDK( 7784): "AdvancedMarkers: false: Capabilities unavailable without a Map ID."Data-driven styling: false
+W/m140.few( 7784): Destroying egl context
+I/m140.bcw( 7784): Trimming OTHER: SingleLabelPickEntityPool's current size 21 to 0.00000, or 0
+W/m140.fhf( 7784): Shutting down renderer while it's not idle - phase is INVALID
+I/m140.bcw( 7784): Trimming LINE_LABELS's current size 19 to 0.00000, or 0
+I/m140.bcw( 7784): Trimming OTHER: LabelSourceOp's current size 3 to 0.00000, or 0
+I/m140.bcw( 7784): Trimming OTHER: LoggingOp's current size 54 to 0.00000, or 0
+I/m140.bcw( 7784): Trimming OTHER: NativeTessellators's current size 1 to 0.00000, or 0
+I/m140.bcw( 7784): Trimming POINTS_LABELS's current size 49 to 0.00000, or 0
+I/m140.bcw( 7784): Trimming OTHER: VertexBuilders's current size 3 to 0.00000, or 0
+E/FlutterGeolocator( 7784): Geolocator position updates stopped
+E/FlutterGeolocator( 7784): There is still another flutter engine connected, not stopping location service
+I/ursetracker.app( 7784): Compiler allocated 4117KB to compile m140.eow m140.epa.l(m140.bbf, m140.ilq, m140.eoo, byte[], boolean, m140.cfe, m140.dfl, java.lang.Iterable)
+I/flutter ( 7784): 🔍 SHIFT PAGE: Loading shifts...
+I/flutter ( 7784): 🧠 SessionManager returned EMP_ID = 10
+I/flutter ( 7784): 📊 Total rows in SHIFT table = 3572
+I/flutter ( 7784): 📡 Running query: SELECT * FROM shift WHERE emp_id = 10 ORDER BY date, shift_start_time
+I/flutter ( 7784):  RPC Active Shift Response: []
+I/flutter ( 7784): 📥 Raw fetched rows = 4
+I/flutter ( 7784): ════════════════════════════════════════════════════════════════
+I/flutter ( 7784): 🔍 APPLY FILTERS: date=Next Scheduled | statuses={}
+I/flutter ( 7784): 📅 Today Local: 2026-04-01 00:00:00.000 | allShifts=4
+I/flutter ( 7784): ✅ After filtering: 1 shift(s)
+I/flutter ( 7784):    → Showing shift #33037 | 2026-04-01 | Scheduled | normalized=scheduled
+I/flutter ( 7784): ✅ Parsed shifts count = 4
+W/WindowOnBackDispatcher( 7784): sendCancelIfRunning: isInProgress=false callback=io.flutter.embedding.android.FlutterActivity$1@10ab333
+Lost connection to device.

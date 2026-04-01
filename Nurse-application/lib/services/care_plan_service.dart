@@ -21,11 +21,10 @@ class CarePlanService {
           .select('*')
           .eq('emp_id', empId)
           .eq('date', today)
-          .or(
-            'shift_mode.eq.individual,'
-            'and(shift_mode.eq.block,parent_block_id.is.null)',
-          )
+          .or('shift_mode.eq.individual,parent_block_id.not.is.null')
           .order('shift_start_time');
+
+      debugPrint('📦 SHIFTS RESPONSE = $response');
 
       return (response as List)
           .map((e) => Shift.fromJson(e as Map<String, dynamic>))
@@ -67,7 +66,7 @@ class CarePlanService {
 
       await supabase.from('shift').update({
         'clock_in': nowUtc,
-        'shift_status': 'In Progress',
+        'shift_status': 'clocked_in',
       }).eq('shift_id', shiftId);
 
       debugPrint('✅ clockInShift: shift $shiftId set to In Progress');
@@ -85,7 +84,7 @@ class CarePlanService {
 
       await supabase.from('shift').update({
         'clock_out': nowUtc,
-        'shift_status': 'Completed',
+        'shift_status': 'clocked_out',
       }).eq('shift_id', shiftId);
 
       debugPrint('✅ clockOutShift: shift $shiftId set to Completed');

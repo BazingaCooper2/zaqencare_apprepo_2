@@ -76,10 +76,11 @@ class Shift {
       clockOut: json['clock_out'] != null
           ? DateTime.parse(json['clock_out'].toString())
           : null,
-      date: json['date']?.toString(),
+      date: json['date']?.toString() ?? 
+            (json['shift_start_time'] != null ? json['shift_start_time'].toString().split('T').first : null),
       shiftType: json['shift_type']?.toString(),
       client: () {
-        final clientData = json['client'];
+        final clientData = json['client'] ?? json['client_final'];
         if (clientData == null) return null;
         if (clientData is List && clientData.isNotEmpty) {
           final first = clientData.first;
@@ -158,7 +159,7 @@ class Shift {
 
   bool get isBlockChild {
     final mode = (shiftMode ?? 'individual').toLowerCase().trim();
-    return parentBlockId != null && mode == 'individual';
+    return mode == 'individual' && parentBlockId != null;
   }
 
   /// Only individual and child block shifts can be clocked in/out
@@ -217,11 +218,14 @@ class Shift {
     switch (normalized) {
       case 'scheduled':
         return 'Scheduled';
-      case 'active':
-      case 'in_progress':
+      case 'offered':
+        return 'Offered';
+      case 'accepted':
+        return 'Accepted';
+      case 'assigned':
+        return 'Assigned';
       case 'clocked_in':
         return 'Clocked in';
-      case 'completed':
       case 'clocked_out':
         return 'Clocked out';
       case 'cancelled':
@@ -236,11 +240,14 @@ class Shift {
     switch (normalized) {
       case 'scheduled':
         return Colors.orange;
-      case 'active':
-      case 'in_progress':
+      case 'offered':
+        return Colors.blueGrey;
+      case 'accepted':
+        return Colors.teal;
+      case 'assigned':
+        return Colors.indigo;
       case 'clocked_in':
         return Colors.blue;
-      case 'completed':
       case 'clocked_out':
         return Colors.green;
       case 'cancelled':
@@ -360,6 +367,9 @@ class Shift {
     }
     if (date != null) {
       return ShiftDateHelpers.formatDateFromDateString(date);
+    }
+    if (shiftStartTime != null && shiftStartTime!.contains('T')) {
+      return ShiftDateHelpers.formatDate(shiftStartTime);
     }
     return '';
   }

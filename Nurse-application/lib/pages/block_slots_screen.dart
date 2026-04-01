@@ -61,13 +61,14 @@ class _BlockSlotsScreenState extends State<BlockSlotsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0F1729),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF2D1B69),
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
         title: Column(
@@ -75,33 +76,37 @@ class _BlockSlotsScreenState extends State<BlockSlotsScreen> {
           children: [
             Text(
               widget.blockShift.department ?? 'Block Shift',
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: colorScheme.onSurface,
                 fontWeight: FontWeight.bold,
                 fontSize: 18,
               ),
             ),
-            const Text(
+            Text(
               'Slot Assignments',
-              style: TextStyle(color: Color(0xFFBB86FC), fontSize: 13),
+              style: TextStyle(
+                color: colorScheme.primary,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white),
+            icon: const Icon(Icons.refresh),
             onPressed: _loadChildShifts,
           ),
         ],
       ),
-      body: _buildBody(),
+      body: _buildBody(theme, colorScheme),
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(ThemeData theme, ColorScheme colorScheme) {
     if (_loading) {
-      return const Center(
-          child: CircularProgressIndicator(color: Color(0xFFBB86FC)));
+      return Center(
+          child: CircularProgressIndicator(color: colorScheme.primary));
     }
 
     if (_error != null) {
@@ -109,9 +114,9 @@ class _BlockSlotsScreenState extends State<BlockSlotsScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline, color: Colors.red, size: 48),
+            Icon(Icons.error_outline, color: colorScheme.error, size: 48),
             const SizedBox(height: 12),
-            Text(_error!, style: const TextStyle(color: Colors.red)),
+            Text(_error!, style: TextStyle(color: colorScheme.error)),
             const SizedBox(height: 16),
             ElevatedButton(
                 onPressed: _loadChildShifts,
@@ -127,12 +132,12 @@ class _BlockSlotsScreenState extends State<BlockSlotsScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.people_alt_outlined,
-                color: Colors.white.withValues(alpha: 0.3), size: 64),
+                color: colorScheme.onSurface.withValues(alpha: 0.3), size: 64),
             const SizedBox(height: 16),
             Text(
               'No slot assignments for this block',
               style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.6), fontSize: 16),
+                  color: colorScheme.onSurface.withValues(alpha: 0.6), fontSize: 16),
             ),
           ],
         ),
@@ -141,16 +146,13 @@ class _BlockSlotsScreenState extends State<BlockSlotsScreen> {
 
     return RefreshIndicator(
       onRefresh: _loadChildShifts,
-      color: const Color(0xFFBB86FC),
+      color: colorScheme.primary,
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: _childShifts.length,
         itemBuilder: (context, index) {
           final shift = _childShifts[index];
-          final isClockedIn =
-              shift.shiftStatus?.toLowerCase() == 'in progress' ||
-                  shift.shiftStatus?.toLowerCase() == 'in_progress';
-
+          
           return PremiumShiftCard(
             shift: shift,
             employee: widget.employee,

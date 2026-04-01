@@ -50,32 +50,33 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0F1729),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF162040),
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
+        title: Text(
           'Client Details',
           style: TextStyle(
-            color: Colors.white,
+            color: colorScheme.onSurface,
             fontWeight: FontWeight.bold,
             fontSize: 18,
           ),
         ),
       ),
-      body: _buildBody(),
+      body: _buildBody(theme, colorScheme),
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(ThemeData theme, ColorScheme colorScheme) {
     if (_loading) {
-      return const Center(
-          child: CircularProgressIndicator(color: Color(0xFF64FFDA)));
+      return Center(
+          child: CircularProgressIndicator(color: colorScheme.primary));
     }
 
     if (_error != null) {
@@ -83,9 +84,9 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline, color: Colors.red, size: 48),
+            Icon(Icons.error_outline, color: colorScheme.error, size: 48),
             const SizedBox(height: 12),
-            Text(_error!, style: const TextStyle(color: Colors.red)),
+            Text(_error!, style: TextStyle(color: colorScheme.error)),
             const SizedBox(height: 16),
             ElevatedButton(onPressed: _loadClient, child: const Text('Retry')),
           ],
@@ -94,9 +95,9 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
     }
 
     if (_client == null) {
-      return const Center(
+      return Center(
         child: Text('Client not found',
-            style: TextStyle(color: Colors.white70, fontSize: 16)),
+            style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 16)),
       );
     }
 
@@ -119,7 +120,7 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
           _InfoSection(
             title: 'Contact Information',
             icon: Icons.contact_phone_outlined,
-            color: const Color(0xFF64FFDA),
+            color: colorScheme.primary,
             children: [
               _InfoRow(label: 'Phone', value: c['phone_main']),
               _InfoRow(label: 'Alt Phone', value: c['phone_other']),
@@ -157,11 +158,11 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
               _InfoRow(label: 'Doctor', value: c['doctor']),
               _InfoRow(label: 'Nurse', value: c['nurse']),
               if (c['wheelchair_user'] == true)
-                const _BoolBadge(label: 'Wheelchair User', icon: Icons.accessible),
+                _BoolBadge(label: 'Wheelchair User', icon: Icons.accessible),
               if (c['has_catheter'] == true)
-                const _BoolBadge(label: 'Has Catheter', icon: Icons.medical_services_outlined),
+                _BoolBadge(label: 'Has Catheter', icon: Icons.medical_services_outlined),
               if (c['requires_oxygen'] == true)
-                const _BoolBadge(label: 'Requires Oxygen', icon: Icons.air),
+                _BoolBadge(label: 'Requires Oxygen', icon: Icons.air),
             ],
           ),
 
@@ -179,7 +180,7 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
             _InfoSection(
               title: 'Care Instructions',
               icon: Icons.assignment_outlined,
-              color: const Color(0xFFBB86FC),
+              color: colorScheme.secondary,
               children: [
                 _InfoRow(value: c['instructions']),
               ],
@@ -239,6 +240,9 @@ class _ClientHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     final imageUrl = client['image_url'] as String?;
     final gender = client['gender'] as String?;
     final status = client['status'] as String?;
@@ -246,30 +250,31 @@ class _ClientHeader extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF1E2D50), Color(0xFF162040)],
-        ),
-        border: Border.all(
-            color: const Color(0xFF64FFDA).withValues(alpha: 0.2)),
+        border: Border.all(color: colorScheme.outlineVariant),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Row(
         children: [
           // Avatar
           CircleAvatar(
             radius: 36,
-            backgroundColor:
-                const Color(0xFF64FFDA).withValues(alpha: 0.15),
+            backgroundColor: colorScheme.primary.withValues(alpha: 0.1),
             backgroundImage: imageUrl != null && imageUrl.isNotEmpty
                 ? NetworkImage(imageUrl)
                 : null,
             child: imageUrl == null || imageUrl.isEmpty
                 ? Text(
                     name.isNotEmpty ? name[0].toUpperCase() : '?',
-                    style: const TextStyle(
-                      color: Color(0xFF64FFDA),
+                    style: TextStyle(
+                      color: colorScheme.primary,
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
                     ),
@@ -283,8 +288,8 @@ class _ClientHeader extends StatelessWidget {
               children: [
                 Text(
                   name,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: colorScheme.onSurface,
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
                   ),
@@ -293,8 +298,8 @@ class _ClientHeader extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     gender,
-                    style: const TextStyle(
-                        color: Color(0xFF8892B0), fontSize: 14),
+                    style: TextStyle(
+                        color: colorScheme.onSurfaceVariant, fontSize: 14),
                   ),
                 ],
                 if (status != null && status.isNotEmpty) ...[
@@ -303,7 +308,7 @@ class _ClientHeader extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 10, vertical: 3),
                     decoration: BoxDecoration(
-                      color: Colors.green.withValues(alpha: 0.15),
+                      color: Colors.green.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
                           color: Colors.green.withValues(alpha: 0.4)),
@@ -311,7 +316,7 @@ class _ClientHeader extends StatelessWidget {
                     child: Text(
                       status,
                       style: const TextStyle(
-                          color: Colors.green, fontSize: 11),
+                          color: Colors.green, fontSize: 11, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ],
@@ -343,6 +348,9 @@ class _InfoSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     // Filter out rows with no value
     final visible = children
         .where((w) => w is! _InfoRow || w.value != null)
@@ -352,10 +360,9 @@ class _InfoSection extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        color: const Color(0xFF1E2D50),
-        border: Border.all(
-            color: Colors.white.withValues(alpha: 0.07)),
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -380,7 +387,7 @@ class _InfoSection extends StatelessWidget {
               ],
             ),
           ),
-          const Divider(height: 1, color: Color(0xFF2A3B60)),
+          Divider(height: 1, color: colorScheme.outlineVariant),
           Padding(
             padding: const EdgeInsets.all(14),
             child: Column(children: visible),
@@ -403,6 +410,9 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     if (value == null || value.toString().trim().isEmpty) {
       return const SizedBox.shrink();
     }
@@ -417,8 +427,8 @@ class _InfoRow extends StatelessWidget {
               width: 120,
               child: Text(
                 label!,
-                style: const TextStyle(
-                    color: Color(0xFF8892B0), fontSize: 13),
+                style: TextStyle(
+                    color: colorScheme.onSurfaceVariant, fontSize: 13),
               ),
             ),
             const SizedBox(width: 8),
@@ -426,7 +436,7 @@ class _InfoRow extends StatelessWidget {
           Expanded(
             child: Text(
               value.toString(),
-              style: const TextStyle(color: Colors.white, fontSize: 14),
+              style: TextStyle(color: colorScheme.onSurface, fontSize: 14),
             ),
           ),
         ],
@@ -451,12 +461,12 @@ class _BoolBadge extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         children: [
-          Icon(icon, color: Colors.red.shade300, size: 16),
+          Icon(icon, color: Colors.red.shade400, size: 16),
           const SizedBox(width: 8),
           Text(
             label,
             style: TextStyle(
-                color: Colors.red.shade300, fontSize: 13),
+                color: Colors.red.shade400, fontSize: 13, fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -491,12 +501,15 @@ class _JsonSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        color: const Color(0xFF1E2D50),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -515,13 +528,13 @@ class _JsonSection extends StatelessWidget {
               ],
             ),
           ),
-          const Divider(height: 1, color: Color(0xFF2A3B60)),
+          Divider(height: 1, color: colorScheme.outlineVariant),
           Padding(
             padding: const EdgeInsets.all(14),
             child: Text(
               _stringify(data),
-              style: const TextStyle(
-                  color: Color(0xFFCCD6F6), fontSize: 13, height: 1.5),
+              style: TextStyle(
+                  color: colorScheme.onSurface, fontSize: 13, height: 1.5),
             ),
           ),
         ],
@@ -560,15 +573,18 @@ class _EmergencyContactsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
     final contacts = _parse();
     if (contacts.isEmpty) return const SizedBox.shrink();
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        color: const Color(0xFF1E2D50),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -590,7 +606,7 @@ class _EmergencyContactsSection extends StatelessWidget {
               ],
             ),
           ),
-          const Divider(height: 1, color: Color(0xFF2A3B60)),
+          Divider(height: 1, color: colorScheme.outlineVariant),
           ...contacts.asMap().entries.map((e) {
             final idx = e.key;
             final contact = e.value;
@@ -601,8 +617,8 @@ class _EmergencyContactsSection extends StatelessWidget {
                 children: [
                   Text(
                     'Contact ${idx + 1}${contact['name'] != null ? ': ${contact['name']}' : ''}',
-                    style: const TextStyle(
-                        color: Colors.white,
+                    style: TextStyle(
+                        color: colorScheme.onSurface,
                         fontWeight: FontWeight.w600,
                         fontSize: 14),
                   ),
@@ -616,8 +632,8 @@ class _EmergencyContactsSection extends StatelessWidget {
                     _InfoRow(label: 'Email', value: contact['email']),
                   const SizedBox(height: 8),
                   if (idx < contacts.length - 1)
-                    const Divider(
-                        height: 1, color: Color(0xFF2A3B60)),
+                    Divider(
+                        height: 1, color: colorScheme.outlineVariant),
                 ],
               ),
             );

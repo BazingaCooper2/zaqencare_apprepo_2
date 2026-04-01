@@ -76,14 +76,45 @@ class _ShiftPageState extends State<ShiftPage> {
         debugPrint('⚠️ Error fetching active shift RPC in ShiftPage: $e');
       }
 
-      // 2. Fetch All Shifts
-      final response = await supabase.from('shift').select('*').eq('emp_id', empId).order('date').order('shift_start_time');
+      // 2. Fetch All Relevant Shifts (Core Logic: All shifts assigned to employee, handle any mode)
+      final response = await supabase
+          .from('shift')
+          .select('*')
+          .eq('emp_id', empId)
+          .not('date', 'is', null)
+          .order('date')
+          .order('shift_start_time');
 
       debugPrint('📥 Raw fetched rows = ${response.length}');
 
-      final rawShifts = List<Map<String, dynamic>>.from(response);
+      final List<Map<String, dynamic>> rawShifts = List<Map<String, dynamic>>.from(response);
 
-      // 3. Collect unique client IDs safely
+      // 3. Fetch Block Parents if any block_child shifts exist AND their parent is not already fetched
+      final Set<int> parentIds = rawShifts
+          .where((s) => s['parent_block_id'] != null)
+          .map((s) => s['parent_block_id'] as int)
+          .toSet();
+
+      if (parentIds.isNotEmpty) {
+        try {
+          final parentResponse = await supabase
+              .from('shift')
+              .select('*')
+              .inFilter('shift_id', parentIds.toList());
+          
+          for (final p in parentResponse) {
+            // Check if already in list to avoid duplicates
+            final parentId = p['shift_id'];
+            if (!rawShifts.any((s) => s['shift_id'] == parentId)) {
+              rawShifts.add(Map<String, dynamic>.from(p));
+            }
+          }
+        } catch (e) {
+          debugPrint('⚠️ Error fetching block parents: $e');
+        }
+      }
+
+      // 4. Collect unique client IDs safely
       final Set<int> clientIds = {};
       for (final shift in rawShifts) {
         final cidRaw = shift['client_id'];
@@ -101,7 +132,7 @@ class _ShiftPageState extends State<ShiftPage> {
         }
       }
 
-      // 4. Fetch and map clients from client_final
+      // 5. Fetch and map clients from client_final
       Map<int, Map<String, dynamic>> clientsMap = {};
       if (clientIds.isNotEmpty) {
         try {
@@ -119,7 +150,7 @@ class _ShiftPageState extends State<ShiftPage> {
         }
       }
 
-      // 5. Attach clients and Parse shifts
+      // 6. Attach clients and Parse shifts
       final shifts = rawShifts.map((rawJson) {
         final json =
             Map<String, dynamic>.from(rawJson); // Clone to ensure mutability
@@ -186,13 +217,14 @@ class _ShiftPageState extends State<ShiftPage> {
   //   "Clocked out" / "clocked out" / "clocked_out" → 'clocked_out'
   static String _normalizeStatus(String? raw) {
     if (raw == null || raw.trim().isEmpty) return '';
-    final s = raw.toLowerCase().trim();
-    if (s.contains('clocked out') || s == 'clocked_out' ||
-        s == 'completed'         || s == 'ended_early') return 'clocked_out';
-    if (s.contains('clocked in')  || s == 'clocked_in' ||
-        s == 'active'             || s == 'in_progress') return 'clocked_in';
-    if (s.contains('cancel'))  return 'cancelled';
-    if (s.contains('scheduled')) return 'scheduled'; // catches 'scheduled', 'Scheduled'
+    final s = raw.toLowerCase().trim().replaceAll(' ', '_');
+    if (s == 'clocked_out' || s == 'completed' || s == 'ended_early') return 'clocked_out';
+    if (s == 'clocked_in' || s == 'active' || s == 'in_progress') return 'clocked_in';
+    if (s == 'scheduled') return 'scheduled';
+    if (s == 'offered') return 'offered';
+    if (s == 'accepted') return 'accepted';
+    if (s == 'assigned') return 'assigned';
+    if (s.contains('cancel')) return 'cancelled';
     return s;
   }
 
@@ -219,8 +251,8 @@ class _ShiftPageState extends State<ShiftPage> {
       final remaining = _allShifts.where((shift) {
         if (shift.shiftId == _activeShiftId) return false;
 
-        // ✅ Logic: Dashboard shows only Individual + Block Parent
-        if (!shift.isIndividualShift && !shift.isBlockParent) return false;
+        // ✅ Logic: Dashboard shows all shift types
+        // if (!shift.isIndividualShift && !shift.isBlockParent) return false;
 
         final shiftDate = _parseDateLocal(shift.date);
         if (shiftDate == null) return false;
@@ -230,9 +262,9 @@ class _ShiftPageState extends State<ShiftPage> {
         // Date check: Today or Future
         final matchesDate = shiftDate.isAtSameMomentAs(todayLocal) || shiftDate.isAfter(todayLocal);
 
-        // Status check: If no status filter, only show actionable ones
+        // Status check: Next Scheduled (scheduled, assigned)
         final matchesStatus = _selectedStatuses.isEmpty
-            ? (status == 'scheduled' || status == 'clocked_in')
+            ? (status == 'scheduled' || status == 'assigned')
             : _selectedStatuses.contains(status);
 
         return matchesDate && matchesStatus;
@@ -249,8 +281,8 @@ class _ShiftPageState extends State<ShiftPage> {
     } else {
       // ALL OTHER TABS
       filtered = _allShifts.where((shift) {
-        // ✅ Logic: Dashboard shows only Individual + Block Parent
-        if (!shift.isIndividualShift && !shift.isBlockParent) return false;
+        // ✅ Core Logic: Show all shift types on Dashboard
+        // if (!shift.isIndividualShift && !shift.isBlockChild && !shift.isBlockParent) return false;
 
         final shiftDate = _parseDateLocal(shift.date);
         if (shiftDate == null) return false;
@@ -261,12 +293,15 @@ class _ShiftPageState extends State<ShiftPage> {
         bool matchesDate = false;
         if (_selectedDateFilter == 'Today') {
           matchesDate = shiftDate.isAtSameMomentAs(todayLocal);
+        } else if (_selectedDateFilter == 'Next Scheduled') {
+          // Next Scheduled includes today and future
+          matchesDate = (shiftDate.isAtSameMomentAs(todayLocal) || shiftDate.isAfter(todayLocal)) && (status == 'scheduled' || status == 'assigned');
         } else if (_selectedDateFilter == 'This Week') {
           final startOfWeek = todayLocal.subtract(Duration(days: todayLocal.weekday - 1));
           final endOfWeek = startOfWeek.add(const Duration(days: 6));
           matchesDate = !shiftDate.isBefore(startOfWeek) && !shiftDate.isAfter(endOfWeek);
         } else if (_selectedDateFilter == 'Completed') {
-          // Completed tab filters by status, not date
+          // Completed tab filters strictly by status
           matchesDate = (status == 'clocked_out' || status == 'cancelled');
         } else {
           // 'All' or unknown
@@ -392,6 +427,15 @@ class _ShiftPageState extends State<ShiftPage> {
                               'scheduled', 'Scheduled', Colors.orange),
                           const SizedBox(width: 8),
                           _buildStatusChip(
+                              'offered', 'Offered', Colors.blueGrey),
+                          const SizedBox(width: 8),
+                          _buildStatusChip(
+                              'accepted', 'Accepted', Colors.teal),
+                          const SizedBox(width: 8),
+                          _buildStatusChip(
+                              'assigned', 'Assigned', Colors.indigo),
+                          const SizedBox(width: 8),
+                          _buildStatusChip(
                               'clocked_in', 'Clocked in', Colors.blue),
                           const SizedBox(width: 8),
                           _buildStatusChip(
@@ -426,13 +470,41 @@ class _ShiftPageState extends State<ShiftPage> {
                               ],
                             ),
                           )
-                        : ListView.builder(
+                        : ListView(
                             padding: const EdgeInsets.all(16),
-                            itemCount: _filteredShifts.length,
-                            itemBuilder: (context, index) {
-                              final shift = _filteredShifts[index];
-                              return _buildShiftCard(shift);
-                            },
+                            children: [
+                              if (_filteredShifts.any((s) => s.isIndividualShift || s.isBlockChild)) ...[
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 4, bottom: 12),
+                                  child: Text(
+                                    'Individual Shifts',
+                                    style: theme.textTheme.titleMedium?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: colorScheme.primary,
+                                    ),
+                                  ),
+                                ),
+                                ..._filteredShifts
+                                    .where((s) => s.isIndividualShift || s.isBlockChild)
+                                    .map((s) => _buildShiftCard(s)),
+                                const SizedBox(height: 24),
+                              ],
+                              if (_filteredShifts.any((s) => s.isBlockParent)) ...[
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 4, bottom: 12),
+                                  child: Text(
+                                    'Block Assignments',
+                                    style: theme.textTheme.titleMedium?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: colorScheme.primary,
+                                    ),
+                                  ),
+                                ),
+                                ..._filteredShifts
+                                    .where((s) => s.isBlockParent)
+                                    .map((s) => _buildShiftCard(s)),
+                              ],
+                            ],
                           ),
                   ),
                 ],
@@ -591,7 +663,7 @@ class _ShiftPageState extends State<ShiftPage> {
                   const Icon(Icons.calendar_today_rounded, color: Color(0xFF5F6368), size: 18),
                   const SizedBox(width: 10),
                   Text(
-                    shift.date ?? 'No date',
+                    shift.clockFormattedDate,
                     style: const TextStyle(color: Color(0xFF3C4043), fontSize: 14, fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(width: 20),

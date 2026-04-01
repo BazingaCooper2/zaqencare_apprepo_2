@@ -8,7 +8,7 @@ import '../providers/theme_provider.dart';
 import 'package:nurse_tracking_app/services/session.dart';
 import 'employee_info_page.dart';
 import 'shift_page.dart';
-import 'time_tracking_page.dart';
+import 'clock_in_out_page.dart';
 import 'login_page.dart';
 import 'reports_page.dart'; // ✅ Added import
 import 'unified_reports_form.dart'; // ✅ Import unified reports form
@@ -223,7 +223,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                       Navigator.of(context).push(
                                         MaterialPageRoute(
                                           builder: (context) =>
-                                              TimeTrackingPage(
+                                              ClockInOutPage(
                                                   employee: _employee!),
                                         ),
                                       );

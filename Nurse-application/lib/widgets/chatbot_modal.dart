@@ -742,6 +742,14 @@ class _ChatbotModalState extends State<ChatbotModal> {
                         final endStr =
                             "${endTime.hour.toString().padLeft(2, '0')}:${endTime.minute.toString().padLeft(2, '0')}:00";
 
+                        // Map leave type for database
+                        String dbLeaveType = 'leave';
+                        if (selectedLeaveType == 'Leave of Absence') {
+                          dbLeaveType = 'LOA';
+                        } else if (selectedLeaveType == 'Vacation') {
+                          dbLeaveType = 'vacation';
+                        }
+
                         await _sendMessageWithSignature(
                           'I need to take ${selectedLeaveType ?? "leave"} from $fromStr $startStr to $toStr $endStr. Reason: $reason',
                           publicUrl,
@@ -749,7 +757,7 @@ class _ChatbotModalState extends State<ChatbotModal> {
                           leaveEndDate: toStr,
                           startTime: startStr,
                           endTime: endStr,
-                          leaveType: selectedLeaveType,
+                          leaveType: dbLeaveType,
                         );
                       } catch (e) {
                         debugPrint('Error in call in sick: $e');

@@ -90,8 +90,6 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
   }
 
   Future<void> _initializeApp() async {
-    await _requestLocationPermission();
-
     // 1. Check for existing session and restore it (PRIORITY)
     await _checkActiveClockInStatus();
 
@@ -100,7 +98,10 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
       await _loadActiveShift();
     }
 
-    // 3. Setup map based on whatever client we found
+    // 3. Request location permission (might show dialog)
+    await _requestLocationPermission();
+
+    // 4. Setup map based on whatever client we found
     _setupMapMarkersAndCircles();
   }
 
@@ -113,7 +114,7 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
       // This ensures we find the active shift even if it started on a different day.
       final activeShiftData = await supabase
           .from('shift')
-          .select('*')
+          .select('*, client(*)')
           .eq('emp_id', empId)
           .not('clock_in', 'is', null)
           .filter('clock_out', 'is', null)
@@ -150,7 +151,7 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
         // Fallback: Check time_logs if shift table didn't have the explicit clock_in/out
         final response = await supabase
             .from('time_logs')
-            .select('*, shift(*)')
+            .select('*, shift(*, client(*))')
             .eq('emp_id', empId)
             .filter('clock_out_time', 'is', null)
             .maybeSingle();
@@ -188,81 +189,46 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
   Future<List<Shift>> fetchTodayShifts(int empId) async {
     debugPrint('🚨 Fetching shifts for emp_id=$empId');
     try {
-      final now = DateTime.now(); // local time
-      final today = DateTime(now.year, now.month, now.day); // local midnight
-
-      // Query a ±1 day window around today so we catch shifts regardless of
-      // whether Supabase stores the date column in UTC or local time.
-      // We then re-filter in Dart using the device's local date.
-      final windowStart = today.subtract(const Duration(days: 1));
-      final windowEnd = today.add(const Duration(days: 2));
-      final windowStartStr =
-          '${windowStart.year}-${windowStart.month.toString().padLeft(2, '0')}-${windowStart.day.toString().padLeft(2, '0')}';
-      final windowEndStr =
-          '${windowEnd.year}-${windowEnd.month.toString().padLeft(2, '0')}-${windowEnd.day.toString().padLeft(2, '0')}';
-
-      // Include every status variant — we'll narrow in Dart afterward.
-      const statuses = [
-        'scheduled',
-        'Scheduled',
-        'clocked_in',
-        'Clocked in',
-        'Clocked In',
-        'active',
-        'Active',
-        'in_progress',
-        'In Progress',
-        'clocked_out',
-        'Clocked out',
-        'Clocked Out',
-      ];
-
+      final now = DateTime.now();
+      final todayStr = now.toIso8601String().substring(0, 10);
+      
+      // BROAD FETCH: match all across time to ensure timezone safety
+      // Using explicit alias 'client:client_final(*)' to match Shift model expectations
       final response = await supabase
           .from('shift')
-          .select('*')
+          .select('*, client:client_final(*)')
           .eq('emp_id', empId)
-          .gte('date', windowStartStr)
-          .lt('date', windowEndStr)
-          .inFilter('shift_status', statuses)
-          .order('shift_start_time', ascending: true);
+          .or('shift_mode.eq.individual,parent_block_id.not.is.null');
 
-      debugPrint(
-          '📅 Raw DB result: ${response.length} shift(s) in [$windowStartStr, $windowEndStr)');
+      debugPrint('📅 Found ${response.length} shift(s) (with client details) for emp $empId');
 
-      // Filter in Dart using local date so timezone differences don't matter.
-      final todayShifts = response
-          .where((s) {
-            final dateStr = s['date']?.toString() ?? '';
-            if (dateStr.isEmpty) return false;
-            try {
-              final parts = dateStr.split('-');
-              if (parts.length != 3) return false;
-              final y = int.parse(parts[0]);
-              final m = int.parse(parts[1]);
-              final d = int.parse(parts[2]);
-              final shiftDay = DateTime(y, m, d);
-              if (shiftDay != today) return false;
+      if (response.isEmpty) {
+        debugPrint('⚠️ No assigned individual/child shifts found for emp $empId at all.');
+        return [];
+      }
 
-              // ✅ Logic: Clock In Screen shows only Individual + Child Shifts
-              final shiftMode = s['shift_mode']?.toString() ?? 'individual';
-              final parentBlockId = s['parent_block_id'];
-              
-              final isIndividual = shiftMode == 'individual' && parentBlockId == null;
-              final isChild = parentBlockId != null;
-
-              return isIndividual || isChild;
-            } catch (_) {
-              return false;
-            }
-          })
+      final allShifts = (response as List)
           .map((s) => Shift.fromJson(s))
           .toList();
 
-      debugPrint(
-          '✅ After local-date & mode filter: ${todayShifts.length} shift(s) (Individual/Child) for today (${today.toLocal()})');
+      // Use LOCAL date string filtering to identify today's assignments
+      final todayShifts = allShifts.where((s) {
+        final rawDate = s.date ?? '';
+        if (rawDate.isEmpty) return false;
+        
+        // Match string-wise (YYYY-MM-DD vs YYYY-MM-DD)
+        final shiftDateStr = rawDate.length >= 10 ? rawDate.substring(0, 10) : rawDate;
+        final isMatch = shiftDateStr == todayStr;
+        
+        debugPrint('🔍 Shift ${s.shiftId} | DB Date: "$rawDate" (Short: $shiftDateStr) | Today: $todayStr | Match: $isMatch');
+        
+        return isMatch;
+      }).toList();
+
+      debugPrint('✅ Filtered to ${todayShifts.length} shift(s) for TODAY across ${allShifts.length} total shifts');
       return todayShifts;
     } catch (e) {
-      debugPrint('❌ Error fetching today shifts: $e');
+      debugPrint('❌ Error fetching shifts in TimeTrackingPage: $e');
       return [];
     }
   }
@@ -284,8 +250,6 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
       }
 
       // 1. Fetch active shift via RPC first (in case clocked in to an older shift).
-      //    Wrapped in its own try/catch so an RPC failure NEVER blocks
-      //    fetchTodayShifts from running below.
       Shift? activeRpcShift;
       try {
         final rpcResponse =
@@ -301,14 +265,17 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
             '🔥 RPC get_active_shift returned: ${activeRpcShift?.shiftId}');
       } catch (rpcErr) {
         debugPrint('⚠️ get_active_shift RPC failed (non-fatal): $rpcErr');
-        // Continue — fetchTodayShifts below will still run.
       }
 
-      // 2. Always fetch today's shifts regardless of RPC result
-      final todayShifts = await fetchTodayShifts(empId);
-      debugPrint(
-          '📊 _loadActiveShift: todayShifts=${todayShifts.length}, rpcShift=${activeRpcShift?.shiftId}');
-
+      // 2. If scheduleId is passed, use that as the target instead of all today's shifts
+      Shift? targetShift;
+      if (widget.scheduleId != null) {
+          final sResp = await supabase.from('shift').select('*, client:client_final(*)').eq('shift_id', widget.scheduleId!).maybeSingle();
+          if (sResp != null) {
+              targetShift = Shift.fromJson(sResp);
+          }
+      }
+      
       Shift? currentlyClockedInShift;
       if (activeRpcShift != null) {
         final st =
@@ -318,54 +285,33 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
         }
       }
 
-      if (currentlyClockedInShift == null) {
-        currentlyClockedInShift = todayShifts.where((s) {
-          final st = s.shiftStatus?.toLowerCase().replaceAll(' ', '_');
-          return st == 'clocked_in' || st == 'active' || st == 'in_progress';
-        }).firstOrNull;
-      }
-
       if (currentlyClockedInShift != null) {
         _todayShifts = [currentlyClockedInShift];
         _activeShift = currentlyClockedInShift;
         _isClockedIn = true;
       } else {
-        // If we found an active log session earlier but shift status hasn't updated yet,
-        // we should still treat the current today's shift as the active one.
-        _todayShifts = todayShifts.where((s) {
-          final st = s.shiftStatus?.toLowerCase().replaceAll(' ', '_');
-          return st == 'scheduled';
-        }).toList();
-
-        if (_todayShifts.isNotEmpty) {
-          // Try to keep currently selected active shift if it's still in the list
-          if (_activeShift != null &&
-              _todayShifts.any((s) => s.shiftId == _activeShift!.shiftId)) {
-            _activeShift = _todayShifts
-                .firstWhere((s) => s.shiftId == _activeShift!.shiftId);
-          } else {
-            _activeShift = _todayShifts.first;
-          }
-
-          // CRITICAL: If _checkActiveClockInStatus found we are clocked in,
-          // force _isClockedIn to stay true for this shift.
-          if (_isClockedIn) {
-            debugPrint(
-                '🔗 Linking active session log to today\'s shift: ${_activeShift!.shiftId}');
-          }
+        if (targetShift != null) {
+           _todayShifts = [targetShift];
+           _activeShift = targetShift;
         } else {
-          // No scheduled shifts today - if clocked in but no shift record found for today
-          // we keep _activeShift as null or keep whatever we have.
-          if (!_isClockedIn) _activeShift = null;
+           _activeShift = null;
+           _todayShifts = [];
         }
+      }
+      
+      // Update UI immediately while secondary data (clients/tasks) loads
+      if (mounted) {
+        setState(() {});
       }
 
       await _loadClientAndTasksForActiveShift();
     } catch (e) {
       debugPrint('❌ Error loading shifts: $e');
-      setState(() {
-        _loadingActiveShift = false;
-      });
+      if (mounted) {
+        setState(() {
+          _loadingActiveShift = false;
+        });
+      }
     }
   }
 
@@ -385,7 +331,7 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
         final clientResponse = await supabase
             .from(Tables.client)
             .select('*')
-            .eq('id', shift.clientId!)
+            .eq('id', shift.clientId!) // Match client_final.id
             .limit(1);
         if (clientResponse.isNotEmpty) {
           client = Client.fromJson(clientResponse.first);
@@ -857,7 +803,7 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
         if (_activeShift != null) {
           await supabase.from('shift').update({
             'clock_in': nowUtc.toIso8601String(),
-            'shift_status': 'Clocked in'
+            'shift_status': 'clocked_in'
           }).eq('shift_id', _activeShift!.shiftId);
         }
 
@@ -1025,7 +971,7 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
         try {
           await supabase.from('shift').update({
             'clock_out': nowUtc.toIso8601String(),
-            'shift_status': 'Clocked out'
+            'shift_status': 'clocked_out'
           }).eq('shift_id', _activeShift!.shiftId);
           debugPrint(
               '✅ Updated shift table with clock_out time and completed status');
@@ -1597,7 +1543,7 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
 
       await supabase.from('shift').update({
         'clock_in': nowUtc.toIso8601String(),
-        'shift_status': 'Clocked in',
+        'shift_status': 'clocked_in',
       }).eq('shift_id', _activeShift!.shiftId);
 
       double? lat, lng;
@@ -1651,7 +1597,7 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
       // 1. Update shift table: clock_out + status = 'Clocked out'
       await supabase.from('shift').update({
         'clock_out': nowUtc.toIso8601String(),
-        'shift_status': 'Clocked out',
+        'shift_status': 'clocked_out',
       }).eq('shift_id', _activeShift!.shiftId);
 
       debugPrint('✅ Manual Clock Out: Updated shift ${_activeShift!.shiftId}');
@@ -1696,7 +1642,7 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
         _currentLogId = null;
         _currentPlaceName = null;
         _activeShift = _activeShift!
-            .copyWith(shiftStatus: 'Clocked out', clockOut: nowUtc);
+            .copyWith(shiftStatus: 'clocked_out', clockOut: nowUtc);
         _manualClockingOut = false;
       });
 
@@ -1841,6 +1787,7 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('🎨 Redrawing TimeTrackingScreen (activeShift: ${_activeShift?.shiftId}, todayShifts: ${_todayShifts.length}, loading: $_loadingActiveShift)');
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
@@ -2117,16 +2064,16 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
                                       );
                                     }).toList(),
                                     onChanged: (selectedShift) {
-                                      if (selectedShift != null &&
-                                          selectedShift.shiftId !=
-                                              _activeShift?.shiftId) {
-                                        setState(() {
-                                          _activeShift = selectedShift;
-                                          _loadingActiveShift = true;
-                                        });
-                                        // Reload the client and tasks for the newly selected shift
-                                        _loadClientAndTasksForActiveShift();
-                                      }
+                                        if (selectedShift != null &&
+                                            selectedShift.shiftId !=
+                                                _activeShift?.shiftId) {
+                                          setState(() {
+                                            _activeShift = selectedShift;
+                                            _loadingActiveShift = true;
+                                          });
+                                          // Reload the client and tasks for the newly selected shift
+                                          _loadClientAndTasksForActiveShift();
+                                        }
                                     },
                                   ),
                                 ),
