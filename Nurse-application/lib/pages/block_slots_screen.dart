@@ -29,9 +29,6 @@ class _BlockSlotsScreenState extends State<BlockSlotsScreen> {
   bool _loading = true;
   String? _error;
 
-  final Set<int> _clockingIn = {};
-  final Set<int> _clockingOut = {};
-
   @override
   void initState() {
     super.initState();
@@ -60,74 +57,6 @@ class _BlockSlotsScreenState extends State<BlockSlotsScreen> {
         });
       }
     }
-  }
-
-  Future<void> _handleClockIn(Shift shift) async {
-    if (_clockingIn.contains(shift.shiftId)) return;
-    setState(() => _clockingIn.add(shift.shiftId));
-    try {
-      final ok = await _service.clockInShift(shift.shiftId);
-      if (!ok) throw Exception('Clock-in failed');
-
-      if (shift.clientId != null) {
-        await _service.autoPopulateTasks(shift.shiftId, shift.clientId!);
-      }
-
-      if (mounted) {
-        _showSnack('✅ Clocked in!');
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => TaskListScreen(
-              shift: shift,
-              employee: widget.employee,
-            ),
-          ),
-        );
-        _loadChildShifts();
-      }
-    } catch (e) {
-      if (mounted) _showSnack('❌ $e', isError: true);
-    } finally {
-      if (mounted) setState(() => _clockingIn.remove(shift.shiftId));
-    }
-  }
-
-  Future<void> _handleClockOut(Shift shift) async {
-    if (_clockingOut.contains(shift.shiftId)) return;
-    setState(() => _clockingOut.add(shift.shiftId));
-    try {
-      final allDone = await _service.areAllTasksComplete(shift.shiftId);
-      if (!allDone) {
-        if (mounted) {
-          _showSnack('⚠️ Complete or skip all tasks first.', isError: true);
-        }
-        return;
-      }
-      final ok = await _service.clockOutShift(shift.shiftId);
-      if (!ok) throw Exception('Clock-out failed');
-      if (mounted) {
-        _showSnack('✅ Clocked out!');
-        _loadChildShifts();
-      }
-    } catch (e) {
-      if (mounted) _showSnack('❌ $e', isError: true);
-    } finally {
-      if (mounted) setState(() => _clockingOut.remove(shift.shiftId));
-    }
-  }
-
-  void _showSnack(String msg, {bool isError = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor:
-            isError ? Colors.red.shade700 : Colors.green.shade700,
-        behavior: SnackBarBehavior.floating,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
   }
 
   @override
@@ -222,14 +151,9 @@ class _BlockSlotsScreenState extends State<BlockSlotsScreen> {
               shift.shiftStatus?.toLowerCase() == 'in progress' ||
                   shift.shiftStatus?.toLowerCase() == 'in_progress';
 
-          return IndividualShiftCard(
+          return PremiumShiftCard(
             shift: shift,
             employee: widget.employee,
-            isClockedIn: isClockedIn,
-            isClockingIn: _clockingIn.contains(shift.shiftId),
-            isClockingOut: _clockingOut.contains(shift.shiftId),
-            onClockIn: () => _handleClockIn(shift),
-            onClockOut: () => _handleClockOut(shift),
             onViewTasks: () async {
               await Navigator.push(
                 context,

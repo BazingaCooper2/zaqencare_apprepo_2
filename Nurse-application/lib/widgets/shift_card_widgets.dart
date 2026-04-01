@@ -3,17 +3,12 @@ import '../models/shift.dart';
 import '../models/employee.dart';
 
 // ─────────────────────────────────────────────
-// SHARED SHIFT CARD WIDGET (used in Dashboard + BlockSlots)
+// SHARED SHIFT CARD WIDGET (Screenshot 3 Style)
 // ─────────────────────────────────────────────
 
 class IndividualShiftCard extends StatelessWidget {
   final Shift shift;
   final Employee employee;
-  final bool isClockedIn;
-  final bool isClockingIn;
-  final bool isClockingOut;
-  final VoidCallback onClockIn;
-  final VoidCallback onClockOut;
   final VoidCallback onViewTasks;
   final VoidCallback? onViewDetails;
 
@@ -21,179 +16,273 @@ class IndividualShiftCard extends StatelessWidget {
     super.key,
     required this.shift,
     required this.employee,
-    required this.isClockedIn,
-    required this.isClockingIn,
-    required this.isClockingOut,
-    required this.onClockIn,
-    required this.onClockOut,
     required this.onViewTasks,
     this.onViewDetails,
   });
 
-  Color _statusColor(String? status) {
-    switch (status?.toLowerCase().replaceAll(' ', '_')) {
-      case 'scheduled':
-        return Colors.orange;
-      case 'in_progress':
-        return const Color(0xFF64FFDA);
-      case 'completed':
-        return Colors.green;
-      case 'cancelled':
-        return Colors.red;
-      default:
-        return Colors.grey;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final statusColor = _statusColor(shift.shiftStatus);
-    final isCompleted = shift.shiftStatus?.toLowerCase() == 'completed';
+    final statusColor = shift.statusColor;
+    final statusText = shift.statusDisplayText;
+    final formattedDate = shift.clockFormattedDate;
+    final timeRangeWithDuration = shift.clockFormattedTimeRangeWithDuration;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
+    return Card(
+      margin: const EdgeInsets.only(bottom: 20),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF1E2D50), Color(0xFF162040)],
-        ),
-        border: Border.all(
-          color: isClockedIn
-              ? const Color(0xFF64FFDA).withValues(alpha: 0.4)
-              : Colors.white.withValues(alpha: 0.08),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-          ),
-        ],
+        side: BorderSide(color: Colors.grey.shade200),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header: client name + status badge
+            // Header: Status Badge & ID
             Row(
               children: [
-                const Icon(Icons.person, color: Color(0xFF64FFDA), size: 20),
-                const SizedBox(width: 8),
+                _buildStatusBadge(statusText, statusColor),
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '#${shift.shiftId}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            
+            // Client Icon and Name
+            Row(
+              children: [
+                Icon(Icons.person_pin_rounded, color: Colors.teal.shade700, size: 28),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    shift.clientName ?? 'Client',
+                    shift.clientName ?? 'Unknown Client',
                     style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 17,
+                      fontSize: 18,
                       fontWeight: FontWeight.bold,
+                      color: Color(0xFF202124),
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                ShiftStatusBadge(
-                    label: shift.statusDisplayText, color: statusColor),
               ],
             ),
-            const SizedBox(height: 10),
-
-            // Date + time row
-            Row(
-              children: [
-                const Icon(Icons.calendar_today,
-                    color: Color(0xFF8892B0), size: 15),
-                const SizedBox(width: 6),
-                Text(
-                  shift.date ?? '',
-                  style: const TextStyle(
-                      color: Color(0xFF8892B0), fontSize: 13),
-                ),
-                const SizedBox(width: 16),
-                const Icon(Icons.access_time,
-                    color: Color(0xFF8892B0), size: 15),
-                const SizedBox(width: 6),
-                Text(
-                  shift.formattedTimeRange,
-                  style: const TextStyle(
-                      color: Color(0xFF8892B0), fontSize: 13),
-                ),
-              ],
-            ),
-
-            if (shift.isBlockChild) ...[
-              const SizedBox(height: 6),
-              const ShiftInfoChip(
-                  label: 'Block Shift', icon: Icons.grid_view),
-            ],
-
             const SizedBox(height: 16),
 
-            if (!isCompleted) ...[
-              Row(
+            // Date & Time Box (Teal Box style from SC 3)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F6F5),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE0EAE8)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (onViewDetails != null)
-                    ShiftActionButton(
-                      label: 'Details',
-                      icon: Icons.info_outline,
-                      color: const Color(0xFF8892B0),
-                      onTap: onViewDetails!,
+                  Row(
+                    children: [
+                      const Icon(Icons.calendar_today_rounded, size: 20, color: Color(0xFF2E7D6B)),
+                      const SizedBox(width: 10),
+                      Text(
+                        formattedDate,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
+                          color: Color(0xFF202124),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(Icons.access_time_rounded, size: 20, color: Color(0xFF2E7D6B)),
+                      const SizedBox(width: 10),
+                      Text(
+                        timeRangeWithDuration,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                          color: Color(0xFF202124),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Action Buttons (View Details, View Tasks)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                if (onViewDetails != null)
+                  OutlinedButton(
+                    onPressed: onViewDetails,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF00695C),
+                      side: const BorderSide(color: Color(0xFFAED581)),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                  const SizedBox(width: 8),
-                  ShiftActionButton(
-                    label: 'Tasks',
-                    icon: Icons.checklist,
-                    color: const Color(0xFFCCD6F6),
-                    onTap: onViewTasks,
+                    child: const Text('View Details', style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: isClockedIn
-                        ? ShiftClockButton(
-                            label: 'Clock Out',
-                            icon: Icons.logout,
-                            color: const Color(0xFFFF6B6B),
-                            loading: isClockingOut,
-                            onTap: onClockOut,
-                          )
-                        : ShiftClockButton(
-                            label: 'Clock In',
-                            icon: Icons.login,
-                            color: const Color(0xFF64FFDA),
-                            loading: isClockingIn,
-                            onTap: onClockIn,
-                          ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: onViewTasks,
+                  icon: const Icon(Icons.assignment_rounded, size: 18),
+                  label: const Text('View Tasks', style: TextStyle(fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFE3F2FD),
+                    foregroundColor: const Color(0xFF1976D2),
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      side: const BorderSide(color: Color(0xFFBBDEFB)),
+                    ),
                   ),
-                ],
-              ),
-            ] else ...[
-              const Row(
-                children: [
-                  Icon(Icons.check_circle, color: Colors.green, size: 18),
-                  SizedBox(width: 6),
-                  Text('Shift Completed',
-                      style: TextStyle(color: Colors.green, fontSize: 14)),
-                ],
-              ),
-              const SizedBox(height: 8),
-              ShiftActionButton(
-                label: 'View Tasks',
-                icon: Icons.checklist,
-                color: const Color(0xFF8892B0),
-                onTap: onViewTasks,
-              ),
-            ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Duration & Overtime Summary Boxes
+            Row(
+              children: [
+                Expanded(
+                  child: _buildSummaryBox(
+                    'Duration',
+                    () {
+                      final h = shift.clockDurationHours;
+                      if (h == null) return 'N/A';
+                      final hrs = h.floor();
+                      final mins = ((h - hrs) * 60).round();
+                      return mins > 0 ? '${hrs}h ${mins}m' : '${hrs}h';
+                    }(),
+                    const Color(0xFFE3F2FD),
+                    const Color(0xFF1976D2),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildSummaryBox(
+                    'Overtime',
+                    () {
+                      final h = shift.clockDurationHours;
+                      if (h == null) return 'N/A';
+                      final ot = h > 8 ? h - 8 : 0.0;
+                      final hrs = ot.floor();
+                      final mins = ((ot - hrs) * 60).round();
+                      return mins > 0 ? '${hrs}h ${mins}m' : '${hrs}h';
+                    }(),
+                    const Color(0xFFFFF3E0),
+                    const Color(0xFFE65100),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
     );
   }
+
+  Widget _buildStatusBadge(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.5), width: 1.5),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w800,
+          fontSize: 13,
+          letterSpacing: 0.3,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryBox(String label, String value, Color bgColor, Color textColor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: textColor.withOpacity(0.8),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+              color: textColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-// ─────────────────────────────────────────────
-// SHARED MINI-WIDGETS
-// ─────────────────────────────────────────────
+/// Same style as IndividualShiftCard but for block-child shifts.
+/// Clock In is removed as per requirement.
+class PremiumShiftCard extends StatelessWidget {
+  final Shift shift;
+  final Employee employee;
+  final VoidCallback onViewTasks;
+  final VoidCallback? onViewDetails;
+
+  const PremiumShiftCard({
+    super.key,
+    required this.shift,
+    required this.employee,
+    required this.onViewTasks,
+    this.onViewDetails,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return IndividualShiftCard(
+      shift: shift,
+      employee: employee,
+      onViewTasks: onViewTasks,
+      onViewDetails: onViewDetails,
+    );
+  }
+}
 
 class ShiftStatusBadge extends StatelessWidget {
   final String label;
@@ -206,129 +295,14 @@ class ShiftStatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
+        color: color.withOpacity(0.15),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
+        border: Border.all(color: color.withOpacity(0.4)),
       ),
       child: Text(
         label,
         style: TextStyle(
             color: color, fontSize: 11, fontWeight: FontWeight.w600),
-      ),
-    );
-  }
-}
-
-class ShiftInfoChip extends StatelessWidget {
-  final String label;
-  final IconData icon;
-
-  const ShiftInfoChip({super.key, required this.label, required this.icon});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: const Color(0xFFBB86FC), size: 14),
-        const SizedBox(width: 4),
-        Text(label,
-            style:
-                const TextStyle(color: Color(0xFFBB86FC), fontSize: 12)),
-      ],
-    );
-  }
-}
-
-class ShiftActionButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
-
-  const ShiftActionButton({
-    super.key,
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: color, size: 14),
-            const SizedBox(width: 4),
-            Text(label, style: TextStyle(color: color, fontSize: 12)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class ShiftClockButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final Color color;
-  final bool loading;
-  final VoidCallback onTap;
-
-  const ShiftClockButton({
-    super.key,
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.loading,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: loading ? null : onTap,
-      child: Container(
-        padding:
-            const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withValues(alpha: 0.5)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (loading)
-              SizedBox(
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: color),
-              )
-            else
-              Icon(icon, color: color, size: 14),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13),
-            ),
-          ],
-        ),
       ),
     );
   }

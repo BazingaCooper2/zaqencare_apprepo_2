@@ -5,6 +5,8 @@ import '../models/shift.dart';
 import 'package:nurse_tracking_app/services/session.dart';
 import '../widgets/tasks_dialog.dart';
 import '../widgets/custom_loading_screen.dart';
+import 'block_slots_screen.dart';
+import '../widgets/shift_card_widgets.dart';
 
 class ShiftPage extends StatefulWidget {
   final Employee employee;
@@ -75,20 +77,7 @@ class _ShiftPageState extends State<ShiftPage> {
       }
 
       // 2. Fetch All Shifts
-      final response = await supabase.from('shift').select('''
-            shift_id,
-            emp_id,
-            client_id,
-            shift_status,
-            shift_start_time,
-            shift_end_time,
-            start_ts,
-            clock_in,
-            clock_out,
-            date,
-            shift_type,
-            task_id
-          ''').eq('emp_id', empId).order('date').order('shift_start_time');
+      final response = await supabase.from('shift').select('*').eq('emp_id', empId).order('date').order('shift_start_time');
 
       debugPrint('📥 Raw fetched rows = ${response.length}');
 
@@ -230,6 +219,9 @@ class _ShiftPageState extends State<ShiftPage> {
       final remaining = _allShifts.where((shift) {
         if (shift.shiftId == _activeShiftId) return false;
 
+        // ✅ Logic: Dashboard shows only Individual + Block Parent
+        if (!shift.isIndividualShift && !shift.isBlockParent) return false;
+
         final shiftDate = _parseDateLocal(shift.date);
         if (shiftDate == null) return false;
 
@@ -253,10 +245,13 @@ class _ShiftPageState extends State<ShiftPage> {
           return (a.shiftStartTime ?? '').compareTo(b.shiftStartTime ?? '');
         });
 
-      filtered = [if (activeShift != null) activeShift, ...remaining];
+      filtered = [if (activeShift != null && (activeShift.isIndividualShift || activeShift.isBlockParent)) activeShift, ...remaining];
     } else {
       // ALL OTHER TABS
       filtered = _allShifts.where((shift) {
+        // ✅ Logic: Dashboard shows only Individual + Block Parent
+        if (!shift.isIndividualShift && !shift.isBlockParent) return false;
+
         final shiftDate = _parseDateLocal(shift.date);
         if (shiftDate == null) return false;
 
@@ -336,7 +331,7 @@ class _ShiftPageState extends State<ShiftPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Shift Dashboard'),
+        title: const Text('My Schedule'),
         elevation: 0,
       ),
       body: RefreshIndicator(
@@ -435,8 +430,8 @@ class _ShiftPageState extends State<ShiftPage> {
                             padding: const EdgeInsets.all(16),
                             itemCount: _filteredShifts.length,
                             itemBuilder: (context, index) {
-                              return _buildShiftCard(
-                                  _filteredShifts[index], theme);
+                              final shift = _filteredShifts[index];
+                              return _buildShiftCard(shift);
                             },
                           ),
                   ),
@@ -495,244 +490,162 @@ class _ShiftPageState extends State<ShiftPage> {
     );
   }
 
-  Widget _buildShiftCard(Shift shift, ThemeData theme) {
-    // Use clock-based helpers — correctly reads clock_in/clock_out timestamps
-    final formattedDate = shift.clockFormattedDate;
-    final timeRangeWithDuration = shift.clockFormattedTimeRangeWithDuration;
-    final statusColor = shift.statusColor;
-    final statusText = shift.statusDisplayText;
-    final normalized = shift.shiftStatus?.toLowerCase().replaceAll(' ', '_');
-    final canComplete =
-        normalized == 'scheduled' || normalized == 'in_progress' || normalized == 'active' || normalized == 'clocked_in';
+  Widget _buildShiftCard(Shift shift) {
+    if (shift.isBlockParent) {
+      return _buildBlockParentCard(shift);
+    }
 
+    return IndividualShiftCard(
+      shift: shift,
+      employee: widget.employee,
+      onViewTasks: () {
+        showDialog(
+          context: context,
+          builder: (context) => TasksDialog(shift: shift),
+        );
+      },
+      onViewDetails: () => _showShiftDetails(shift, Theme.of(context)),
+    );
+  }
+
+  Widget _buildBlockParentCard(Shift shift) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      elevation: 2,
+      margin: const EdgeInsets.only(bottom: 20),
+      elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: Colors.grey.shade200),
       ),
-      child: InkWell(
-        onTap: () {
-          showDialog(
-            context: context,
-            builder: (context) => TasksDialog(shift: shift),
-          );
-        },
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // HEADER
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            _buildStatusTag(statusText, statusColor),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                    color: Colors.grey.withValues(alpha: 0.2)),
-                              ),
-                              child: Text(
-                                '#${shift.shiftId}',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.grey.shade600,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-
-                        // CLIENT NAME (ADDED BACK TO CARD FOR BETTER DASHBOARD)
-                        Row(
-                          children: [
-                            Icon(Icons.person_pin_rounded,
-                                size: 18, color: theme.colorScheme.primary),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                shift.clientName ?? 'Unknown Client',
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: theme.colorScheme.onSurface,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 12),
-
-                        // IMPROVED DATE & TIME DISPLAY
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.surfaceContainerHighest
-                                .withOpacity(0.3),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                                color: theme.colorScheme.outlineVariant
-                                    .withOpacity(0.5)),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(Icons.calendar_today_rounded,
-                                      size: 16,
-                                      color: theme.colorScheme.primary),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      formattedDate,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 14,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                                  Row(
-                                children: [
-                                  Icon(Icons.access_time_rounded,
-                                      size: 16,
-                                      color: theme.colorScheme.primary),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      timeRangeWithDuration,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 14,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE3F2FD),
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                ],
-              ),
-
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    // View Details Button
-                    SizedBox(
-                      height: 32,
-                      child: OutlinedButton(
-                        onPressed: () => _showShiftDetails(shift, theme),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: theme.colorScheme.primary,
-                          side: BorderSide(
-                              color:
-                                  theme.colorScheme.primary.withOpacity(0.5)),
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
+                  child: const Icon(
+                    Icons.grid_view_rounded,
+                    color: Color(0xFF1976D2),
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        shift.department ?? 'Block Assignment',
+                        style: const TextStyle(
+                          color: Color(0xFF202124),
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
                         ),
-                        child: const Text('View Details',
-                            style: TextStyle(fontSize: 13)),
                       ),
-                    ),
-
-                    // View Tasks Button (if applicable)
-                    if (canComplete) ...[
-                      const SizedBox(width: 8),
-                      SizedBox(
-                        height: 32,
-                        child: ElevatedButton.icon(
-                          onPressed: () {
-                            showDialog(
-                              context: context,
-                              builder: (context) => TasksDialog(shift: shift),
-                            );
-                          },
-                          icon: const Icon(Icons.list_alt_rounded, size: 16),
-                          label: const Text('View Tasks',
-                              style: TextStyle(fontSize: 13)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue.shade50,
-                            foregroundColor: Colors.blue.shade700,
-                            elevation: 0,
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              side: BorderSide(color: Colors.blue.shade200),
-                            ),
-                          ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Multiple Slots Assigned',
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 13,
                         ),
                       ),
                     ],
-                  ],
+                  ),
                 ),
-              ),
-
-              const SizedBox(height: 12),
-
-              // Duration & Overtime
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildInfoChip(
-                      'Duration',
-                      () {
-                        final h = shift.clockDurationHours;
-                        if (h == null) return 'N/A';
-                        final hrs = h.floor();
-                        final mins = ((h - hrs) * 60).round();
-                        return mins > 0 ? '${hrs}h ${mins}m' : '${hrs}h';
-                      }(),
-                      Colors.blue,
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    color: const Color(0xFFF3E5F5),
+                    border: Border.all(color: const Color(0xFFCE93D8)),
+                  ),
+                  child: const Text(
+                    'BLOCK',
+                    style: TextStyle(
+                      color: Color(0xFF7B1FA2),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.2,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _buildInfoChip(
-                      'Overtime',
-                      () {
-                        final h = shift.clockDurationHours;
-                        if (h == null) return 'N/A';
-                        final ot = h > 8 ? h - 8 : 0.0;
-                        final hrs = ot.floor();
-                        final mins = ((ot - hrs) * 60).round();
-                        return mins > 0 ? '${hrs}h ${mins}m' : '${hrs}h';
-                      }(),
-                      Colors.orange,
-                    ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8F9FA),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.calendar_today_rounded, color: Color(0xFF5F6368), size: 18),
+                  const SizedBox(width: 10),
+                  Text(
+                    shift.date ?? 'No date',
+                    style: const TextStyle(color: Color(0xFF3C4043), fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(width: 20),
+                  const Icon(Icons.access_time_rounded, color: Color(0xFF5F6368), size: 18),
+                  const SizedBox(width: 10),
+                  Text(
+                    shift.formattedTimeRange,
+                    style: const TextStyle(color: Color(0xFF3C4043), fontSize: 14, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => BlockSlotsScreen(
+                        blockShift: shift,
+                        employee: widget.employee,
+                      ),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFE3F2FD),
+                  foregroundColor: const Color(0xFF1976D2),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    side: const BorderSide(color: Color(0xFFBBDEFB)),
+                  ),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.format_list_bulleted_rounded, size: 20),
+                    SizedBox(width: 12),
+                    Text(
+                      'View Assigned Slots',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -844,48 +757,48 @@ class _ShiftPageState extends State<ShiftPage> {
 
   Widget _buildStatusTag(String text, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color, width: 1.5),
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.5), width: 1.5),
       ),
       child: Text(
         text,
         style: TextStyle(
           color: color,
-          fontWeight: FontWeight.bold,
-          fontSize: 12,
+          fontWeight: FontWeight.w800,
+          fontSize: 13,
+          letterSpacing: 0.3,
         ),
       ),
     );
   }
 
-  Widget _buildInfoChip(String label, String value, Color color) {
+  Widget _buildInfoChip(String label, String value, Color bgColor, Color textColor) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 16),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
+        color: bgColor,
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         children: [
           Text(
             label,
             style: TextStyle(
-              color: color,
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: textColor.withOpacity(0.8),
             ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 6),
           Text(
             value,
             style: TextStyle(
-              color: color,
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+              color: textColor,
             ),
           ),
         ],

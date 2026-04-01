@@ -8,10 +8,10 @@ import 'package:geocoding/geocoding.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import '../main.dart';
-import '../models/employee.dart';
-import '../models/shift.dart';
-import '../models/client.dart';
-import '../models/task_model.dart';
+import 'package:nurse_tracking_app/models/employee.dart';
+import 'package:nurse_tracking_app/models/shift.dart';
+import 'package:nurse_tracking_app/models/client.dart';
+import 'package:nurse_tracking_app/models/task_model.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:nurse_tracking_app/services/session.dart';
 import 'package:nurse_tracking_app/services/directions_service.dart';
@@ -235,15 +235,22 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
             final dateStr = s['date']?.toString() ?? '';
             if (dateStr.isEmpty) return false;
             try {
-              // SAFE PARSING: Use local date string split to avoid UTC/Local timezone offsets.
-              // This ensures "2026-03-28" is always Mar 28 regardless of device location.
               final parts = dateStr.split('-');
               if (parts.length != 3) return false;
               final y = int.parse(parts[0]);
               final m = int.parse(parts[1]);
               final d = int.parse(parts[2]);
               final shiftDay = DateTime(y, m, d);
-              return shiftDay == today;
+              if (shiftDay != today) return false;
+
+              // ✅ Logic: Clock In Screen shows only Individual + Child Shifts
+              final shiftMode = s['shift_mode']?.toString() ?? 'individual';
+              final parentBlockId = s['parent_block_id'];
+              
+              final isIndividual = shiftMode == 'individual' && parentBlockId == null;
+              final isChild = parentBlockId != null;
+
+              return isIndividual || isChild;
             } catch (_) {
               return false;
             }
@@ -252,7 +259,7 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
           .toList();
 
       debugPrint(
-          '✅ After local-date filter: ${todayShifts.length} shift(s) for today (${today.toLocal()})');
+          '✅ After local-date & mode filter: ${todayShifts.length} shift(s) (Individual/Child) for today (${today.toLocal()})');
       return todayShifts;
     } catch (e) {
       debugPrint('❌ Error fetching today shifts: $e');
@@ -2457,8 +2464,15 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
                                     padding: const EdgeInsets.all(16),
                                     width: double.infinity,
                                     decoration: BoxDecoration(
-                                      color: Colors.grey.shade50,
-                                      borderRadius: BorderRadius.circular(12),
+                                      color: _activeShift!.isBlockChild
+                                          ? const Color(0xFFF1F6F5)
+                                          : Colors.blue.withValues(alpha: 0.05),
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: _activeShift!.isBlockChild
+                                            ? const Color(0xFFE0EAE8)
+                                            : Colors.blue.withValues(alpha: 0.1),
+                                      ),
                                     ),
                                     child: Text(
                                       'No tasks assigned for this shift.',

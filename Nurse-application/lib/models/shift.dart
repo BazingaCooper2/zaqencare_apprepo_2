@@ -134,21 +134,32 @@ class Shift {
   }
 
   // Compatibility getters
-  String? get clientName =>
-      client?.name ??
-      '${client?.firstName ?? ''} ${client?.lastName ?? ''}'.trim();
+  String? get clientName {
+    if (client != null) {
+      final fn = client!.fullName;
+      if (fn.isNotEmpty) return fn;
+    }
+    if (department != null && department!.trim().isNotEmpty) return department;
+    return clientId != null ? 'Client (ID: $clientId)' : 'Shift #$shiftId';
+  }
   String? get clientLocation => client?.fullAddress;
   String? get clientServiceType => client?.serviceType ?? '';
 
   // ✅ Shift type classification helpers
-  bool get isIndividualShift =>
-      shiftMode == 'individual' && parentBlockId == null;
+  bool get isIndividualShift {
+    final mode = (shiftMode ?? 'individual').toLowerCase().trim();
+    return mode == 'individual' && parentBlockId == null;
+  }
 
-  bool get isBlockParent =>
-      shiftMode == 'block' && parentBlockId == null;
+  bool get isBlockParent {
+    final mode = (shiftMode ?? '').toLowerCase().trim();
+    return mode == 'block' && parentBlockId == null;
+  }
 
-  bool get isBlockChild =>
-      shiftMode == 'individual' && parentBlockId != null;
+  bool get isBlockChild {
+    final mode = (shiftMode ?? 'individual').toLowerCase().trim();
+    return parentBlockId != null && mode == 'individual';
+  }
 
   /// Only individual and child block shifts can be clocked in/out
   bool get canClockInOut => isIndividualShift || isBlockChild;

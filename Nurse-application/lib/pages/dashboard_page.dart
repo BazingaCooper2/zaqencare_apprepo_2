@@ -17,7 +17,7 @@ import '../services/shift_offer_helper.dart';
 import 'shift_offers_page.dart';
 import '../widgets/custom_loading_screen.dart';
 import '../constants/tables.dart';
-import 'shift_dashboard_screen.dart'; // ✅ New care plan shift dashboard
+
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -210,24 +210,8 @@ class _DashboardPageState extends State<DashboardPage> {
                             ),
                             const SizedBox(height: 16),
 
-                            // SHIFT DASHBOARD (Care Plan Tasks)
-                            _DashboardCard(
-                              title: 'Shift Dashboard',
-                              subtitle: 'Clock in, tasks & care plans',
-                              icon: Icons.medical_services_outlined,
-                              color: Colors.teal.shade600,
-                              isFeatured: true,
-                              onTap: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        ShiftDashboardScreen(
-                                            employee: _employee!),
-                                  ),
-                                );
-                              },
-                            ),
-                            const SizedBox(height: 16),
+                             const SizedBox(height: 16),
+
                             Row(
                               children: [
                                 Expanded(
