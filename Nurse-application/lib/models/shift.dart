@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'client.dart';
-import 'patient.dart';
-import '../utils/shift_date_helpers.dart';
+import 'package:nurse_tracking_app/models/client.dart';
+import 'package:nurse_tracking_app/models/patient.dart';
+import 'package:nurse_tracking_app/utils/shift_date_helpers.dart';
 
 class Shift {
   final int shiftId;
@@ -25,6 +25,11 @@ class Shift {
   final Patient? patient;
   final String? useServiceDuration;
 
+  // ✅ NEW: Shift type / block fields
+  final String? shiftMode;       // "individual" | "block"
+  final int? parentBlockId;      // null = parent/standalone, int = child shift
+  final String? department;      // program type for block shifts
+
   Shift({
     required this.shiftId,
     this.empId,
@@ -45,6 +50,9 @@ class Shift {
     this.shiftProgressNote,
     this.patient,
     this.useServiceDuration,
+    this.shiftMode,
+    this.parentBlockId,
+    this.department,
   });
 
   factory Shift.fromJson(Map<String, dynamic> json) {
@@ -97,6 +105,9 @@ class Shift {
       shiftProgressNote: json['shift_progress_note']?.toString(),
       patient: null,
       useServiceDuration: json['use_service_duration']?.toString(),
+      shiftMode: json['shift_mode']?.toString(),
+      parentBlockId: parseBigInt(json['parent_block_id']),
+      department: json['department']?.toString(),
     );
   }
 
@@ -116,6 +127,9 @@ class Shift {
       'shift_status': shiftStatus,
       'shift_progress_note': shiftProgressNote,
       'use_service_duration': useServiceDuration,
+      'shift_mode': shiftMode,
+      'parent_block_id': parentBlockId,
+      'department': department,
     };
   }
 
@@ -124,7 +138,20 @@ class Shift {
       client?.name ??
       '${client?.firstName ?? ''} ${client?.lastName ?? ''}'.trim();
   String? get clientLocation => client?.fullAddress;
-  String? get clientServiceType => client?.serviceType ?? client?.status;
+  String? get clientServiceType => client?.serviceType ?? '';
+
+  // ✅ Shift type classification helpers
+  bool get isIndividualShift =>
+      shiftMode == 'individual' && parentBlockId == null;
+
+  bool get isBlockParent =>
+      shiftMode == 'block' && parentBlockId == null;
+
+  bool get isBlockChild =>
+      shiftMode == 'individual' && parentBlockId != null;
+
+  /// Only individual and child block shifts can be clocked in/out
+  bool get canClockInOut => isIndividualShift || isBlockChild;
 
   Shift copyWith({
     int? shiftId,
@@ -145,6 +172,9 @@ class Shift {
     Client? client,
     DateTime? clockIn,
     DateTime? clockOut,
+    String? shiftMode,
+    int? parentBlockId,
+    String? department,
   }) {
     return Shift(
       shiftId: shiftId ?? this.shiftId,
@@ -165,6 +195,9 @@ class Shift {
       patient: patient ?? this.patient,
       useServiceDuration: useServiceDuration ?? this.useServiceDuration,
       client: client ?? this.client,
+      shiftMode: shiftMode ?? this.shiftMode,
+      parentBlockId: parentBlockId ?? this.parentBlockId,
+      department: department ?? this.department,
     );
   }
 
@@ -206,7 +239,6 @@ class Shift {
     }
   }
 
-  // Helper method to parse various time formats
   static DateTime? _parseTimeAny(String? input) {
     if (input == null || input.isEmpty) return null;
 
@@ -243,11 +275,9 @@ class Shift {
     return null;
   }
 
-  // Helper method to calculate duration in hours
   double? get durationHours {
     final start = _parseTimeAny(shiftStartTime);
     final end = _parseTimeAny(shiftEndTime);
-
     if (start == null || end == null) return null;
 
     // If end is before start in time-only mode, mostly doesn't happen with full dates.
@@ -262,21 +292,18 @@ class Shift {
     return diff.inMinutes / 60.0;
   }
 
-  // Helper method to calculate overtime hours
   double? get overtimeHours {
     final duration = durationHours;
     if (duration == null) return null;
     return duration > 8 ? duration - 8 : 0;
   }
 
-  // Helper method to convert 24hr time OR ISO time to 12hr AM/PM format
   static String formatTime12Hour(String? timeInput) {
     if (timeInput == null || timeInput.isEmpty) return '';
-
     try {
       final dateTime = _parseTimeAny(timeInput);
       if (dateTime != null) {
-        return DateFormat('h:mm a').format(dateTime); // e.g. 2:45 PM
+        return DateFormat('h:mm a').format(dateTime);
       }
       return timeInput;
     } catch (_) {
@@ -284,10 +311,7 @@ class Shift {
     }
   }
 
-  // Get formatted start time (12-hour format)
   String get formattedStartTime => formatTime12Hour(shiftStartTime);
-
-  // Get formatted end time (12-hour format)
   String get formattedEndTime => formatTime12Hour(shiftEndTime);
 
   // Get formatted time range (e.g., "9:00 AM - 5:00 PM")

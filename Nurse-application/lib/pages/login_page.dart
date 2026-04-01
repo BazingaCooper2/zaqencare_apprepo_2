@@ -4,7 +4,6 @@ import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:nurse_tracking_app/pages/dashboard_page.dart';
 import 'package:nurse_tracking_app/services/session.dart';
-import 'package:nurse_tracking_app/services/shift_offer_helper.dart';
 import 'package:nurse_tracking_app/constants/tables.dart';
 
 class LoginPage extends StatefulWidget {
@@ -114,15 +113,7 @@ class _LoginPageState extends State<LoginPage> {
       await SessionManager.saveSession(employee);
       debugPrint('💾 Session saved for employee: ${employee['email']}');
 
-      // ✅ Step 4: Initialize shift offer system
-      try {
-        await initializeShiftOfferSystem();
-      } catch (e) {
-        debugPrint('⚠️ Non-critical: Shift offer init failed: $e');
-        // Don't block login if shift offers fail
-      }
-
-      // ✅ Step 5: Navigate to dashboard
+      // ✅ Navigate to dashboard
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('✅ Login successful')),
@@ -156,7 +147,6 @@ class _LoginPageState extends State<LoginPage> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    // Modern gradient background
     final backgroundGradient = LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
@@ -187,7 +177,7 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ),
                   children: [
-                    // Brand Logo/Icon with shadow
+                    // Brand Logo/Icon
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
