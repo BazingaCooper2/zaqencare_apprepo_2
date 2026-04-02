@@ -7,7 +7,7 @@ class Task {
   final String? taskCode;
   final bool isFromClient; // true if from client_final.tasks JSONB
   final bool isFromShiftTaskId; // true if from shift.task_id comma-separated
-  final String? shiftTaskLogStatus; // pending, completed, skipped
+  final String? shiftTaskLogStatus; // pending, done, skipped
   final String? skipReason;
 
   Task({

@@ -801,9 +801,17 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
 
       if (response.isNotEmpty) {
         if (_activeShift != null) {
+          // ✅ CRITICAL: Update individual employee status immediately.
+          final empId = (await SessionManager.getEmpId()) ?? _activeShift?.empId;
+          if (empId != null) {
+            await supabase.from('employee_final').update({
+              'Employee_status': 'Active'
+            }).eq('emp_id', empId);
+          }
+
           await supabase.from('shift').update({
             'clock_in': nowUtc.toIso8601String(),
-            'shift_status': 'clocked_in'
+            'shift_status': 'Clocked in'
           }).eq('shift_id', _activeShift!.shiftId);
         }
 
@@ -812,6 +820,12 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
           _currentPlaceName = placeName;
           _currentLogId = response.first['id'].toString();
           _clockInTimeUtc = nowUtc;
+          if (_activeShift != null) {
+            _activeShift = _activeShift!.copyWith(
+              shiftStatus: 'Clocked in',
+              clockIn: nowUtc,
+            );
+          }
         });
 
         _showSnackBar('Auto Clocked IN');
@@ -861,8 +875,8 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
 
       for (final task in _tasks) {
         final finalStatus = task.shiftTaskLogStatus ??
-            (task.status ? 'completed' : 'pending');
-        final isCompleted = finalStatus == 'completed';
+            (task.status ? 'done' : 'pending');
+        final isCompleted = finalStatus == 'done';
         final isTemporary = task.isLocal;
         final taskName = task.details ?? 'Task';
 
@@ -971,10 +985,17 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
         try {
           await supabase.from('shift').update({
             'clock_out': nowUtc.toIso8601String(),
-            'shift_status': 'clocked_out'
+            'shift_status': 'Clocked out'
           }).eq('shift_id', _activeShift!.shiftId);
           debugPrint(
               '✅ Updated shift table with clock_out time and completed status');
+
+          final empId = await SessionManager.getEmpId();
+          if (empId != null) {
+             await supabase.from('employee_final').update({
+               'Employee_status': 'Active'
+             }).eq('emp_id', empId);
+          }
         } catch (e) {
           debugPrint('⚠️ Failed to update shift table clock_out: $e');
         }
@@ -1267,7 +1288,7 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
         'status': status,
         'skip_reason':
             skipReason, // explicitly pass to ensure it clears when resuming
-        'completed_at': status == 'completed'
+        'completed_at': status == 'done'
             ? nowUtc
             : null,
       }, onConflict: 'shift_id, order_index').select();
@@ -1277,7 +1298,7 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
       // -- ALSO sync to the new shift_tasks table (dynamically in real-time) --
       if (_tasks.length > orderIndex) {
         final taskDetails = _tasks[orderIndex].details ?? 'Task';
-        final isCompleted = status == 'completed';
+        final isCompleted = status == 'done';
         final isTemporary = _tasks[orderIndex].isLocal;
         
         final row = <String, dynamic>{
@@ -1446,7 +1467,7 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
         (t) => t.taskId == task.taskId && t.details == task.details);
     if (index == -1) return;
 
-    final newStatus = value ? 'completed' : 'pending';
+    final newStatus = value ? 'done' : 'pending';
 
     // Optimistically update memory so checks snap instantly
     Task updatedTask = task.copyWith(
@@ -1541,12 +1562,17 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
 
     try {
       final nowUtc = DateTime.now().toUtc();
-      final empId = await SessionManager.getEmpId();
+      final empId = (await SessionManager.getEmpId()) ?? _activeShift?.empId;
       if (empId == null) return;
+
+      // ✅ CRITICAL: Ensure individual employee status remains Active.
+      await supabase.from('employee_final').update({
+        'Employee_status': 'Active'
+      }).eq('emp_id', empId);
 
       await supabase.from('shift').update({
         'clock_in': nowUtc.toIso8601String(),
-        'shift_status': 'clocked_in',
+        'shift_status': 'Clocked in',
       }).eq('shift_id', _activeShift!.shiftId);
 
       double? lat, lng;
@@ -1571,6 +1597,10 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
         _isClockedIn = true;
         _clockInTimeUtc = nowUtc;
         _currentLogId = logResponse.first['id'].toString();
+        _activeShift = _activeShift!.copyWith(
+          shiftStatus: 'Clocked in',
+          clockIn: nowUtc,
+        );
         _manualClockingIn = false;
       });
 
@@ -1592,6 +1622,13 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
       return;
     }
 
+    final empId = (await SessionManager.getEmpId()) ?? _activeShift?.empId;
+    if (empId != null) {
+      await supabase.from('employee_final').update({
+        'Employee_status': 'Active'
+      }).eq('emp_id', empId);
+    }
+
     setState(() => _manualClockingOut = true);
 
     try {
@@ -1600,7 +1637,7 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
       // 1. Update shift table: clock_out + status = 'Clocked out'
       await supabase.from('shift').update({
         'clock_out': nowUtc.toIso8601String(),
-        'shift_status': 'clocked_out',
+        'shift_status': 'Clocked out',
       }).eq('shift_id', _activeShift!.shiftId);
 
       debugPrint('✅ Manual Clock Out: Updated shift ${_activeShift!.shiftId}');
@@ -1634,7 +1671,6 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
       }
 
       // Persist final task outcomes to shift_tasks table
-      final empId = await SessionManager.getEmpId();
       if (empId != null) {
         await _finalizeShiftTasks(_activeShift!.shiftId, empId);
       }
@@ -1645,9 +1681,12 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
         _currentLogId = null;
         _currentPlaceName = null;
         _activeShift = _activeShift!
-            .copyWith(shiftStatus: 'clocked_out', clockOut: nowUtc);
+            .copyWith(shiftStatus: 'Clocked out', clockOut: nowUtc);
         _manualClockingOut = false;
       });
+
+
+
 
       _showSnackBar('✅ Clocked Out successfully');
 

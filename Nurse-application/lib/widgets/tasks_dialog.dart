@@ -182,7 +182,7 @@ class _TasksDialogState extends State<TasksDialog> {
 
   Future<void> _completeShift() async {
     try {
-      await supabase.from('shift').update({'shift_status': 'completed'}).eq(
+      await supabase.from('shift').update({'shift_status': 'Clocked out'}).eq(
           'shift_id', widget.shift.shiftId);
 
       if (mounted) {

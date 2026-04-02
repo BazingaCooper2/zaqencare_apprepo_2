@@ -25,7 +25,7 @@ class CarePlanService {
           .from('shift')
           .select('*, client:client_final(*)')
           .eq('emp_id', empId)
-          .inFilter('shift_status', ['Scheduled', 'Assigned', 'clocked_in'])
+          .inFilter('shift_status', ['Scheduled', 'Assigned', 'clocked_in', 'Clocked in'])
           .gte('shift_start_time', startOfToday)
           .lt('shift_start_time', endOfToday)
           .order('shift_start_time');
@@ -73,7 +73,7 @@ class CarePlanService {
 
       await supabase.from('shift').update({
         'clock_in': nowUtc,
-        'shift_status': 'clocked_in',
+        'shift_status': 'Clocked in',
       }).eq('shift_id', shiftId);
 
       debugPrint('✅ clockInShift: shift $shiftId set to In Progress');
@@ -91,7 +91,7 @@ class CarePlanService {
 
       await supabase.from('shift').update({
         'clock_out': nowUtc,
-        'shift_status': 'clocked_out',
+        'shift_status': 'Clocked out',
       }).eq('shift_id', shiftId);
 
       debugPrint('✅ clockOutShift: shift $shiftId set to Completed');
