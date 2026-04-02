@@ -1,0 +1,28 @@
+ M .idea/caches/deviceStreaming.xml
+ M .idea/misc.xml
+ M Nurse-application/android/app/build.gradle.kts
+ M Nurse-application/lib/main.dart
+ M Nurse-application/lib/models/client.dart
+ M Nurse-application/lib/models/employee.dart
+ M Nurse-application/lib/models/shift.dart
+ M Nurse-application/lib/models/shift_offer_record.dart
+ M Nurse-application/lib/models/task_model.dart
+ M Nurse-application/lib/pages/dashboard_page.dart
+ M Nurse-application/lib/pages/employee_info_page.dart
+ M Nurse-application/lib/pages/employee_setup_page.dart
+ M Nurse-application/lib/pages/login_page.dart
+ M Nurse-application/lib/pages/reports_page.dart
+ M Nurse-application/lib/pages/shift_page.dart
+ M Nurse-application/lib/pages/time_tracking_page.dart
+ M Nurse-application/lib/services/email_service.dart
+ M Nurse-application/lib/services/shift_offer_manager.dart
+ M Nurse-application/lib/services/shift_offers_service.dart
+ M Nurse-application/lib/widgets/chatbot_modal.dart
+ M Nurse-application/lib/widgets/tasks_dialog.dart
+ M Nurse-application/pubspec.yaml
+ M Nurse-application/supabase/functions/chatbot-handle-request/db.ts
+?? .idea/deviceManager.xml
+?? Nurse-application/DATABASE_MIGRATION_REPORT.md
+?? Nurse-application/lib/constants/
+?? Nurse-application/supabase/migrations/
+?? git_status.txt
