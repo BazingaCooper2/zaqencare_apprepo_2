@@ -97,16 +97,17 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
     if (_client == null) {
       return Center(
         child: Text('Client not found',
-            style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 16)),
+            style:
+                TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 16)),
       );
     }
 
     final c = _client!;
-    final fullName =
-        '${c['first_name'] ?? ''} ${c['last_name'] ?? ''}'.trim();
+    final fullName = '${c['first_name'] ?? ''} ${c['last_name'] ?? ''}'.trim();
     final preferredName = c['preferred_name'] as String?;
-    final displayName =
-        preferredName != null && preferredName.isNotEmpty ? preferredName : fullName;
+    final displayName = preferredName != null && preferredName.isNotEmpty
+        ? preferredName
+        : fullName;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -126,8 +127,7 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
               _InfoRow(label: 'Alt Phone', value: c['phone_other']),
               _InfoRow(label: 'Email', value: c['email']),
               _InfoRow(
-                  label: 'Preferred Contact',
-                  value: c['communication_method']),
+                  label: 'Preferred Contact', value: c['communication_method']),
             ],
           ),
 
@@ -152,17 +152,21 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
             icon: Icons.medical_information_outlined,
             color: Colors.red.shade400,
             children: [
-              _InfoRow(label: 'Primary Diagnosis', value: c['primary_diagnosis']),
+              _InfoRow(
+                  label: 'Primary Diagnosis', value: c['primary_diagnosis']),
               _InfoRow(label: 'Risks', value: c['risks']),
               _InfoRow(label: 'Service Type', value: c['service_type']),
               _InfoRow(label: 'Doctor', value: c['doctor']),
               _InfoRow(label: 'Nurse', value: c['nurse']),
               if (c['wheelchair_user'] == true)
-                _BoolBadge(label: 'Wheelchair User', icon: Icons.accessible),
+                const _BoolBadge(
+                    label: 'Wheelchair User', icon: Icons.accessible),
               if (c['has_catheter'] == true)
-                _BoolBadge(label: 'Has Catheter', icon: Icons.medical_services_outlined),
+                const _BoolBadge(
+                    label: 'Has Catheter',
+                    icon: Icons.medical_services_outlined),
               if (c['requires_oxygen'] == true)
-                _BoolBadge(label: 'Requires Oxygen', icon: Icons.air),
+                const _BoolBadge(label: 'Requires Oxygen', icon: Icons.air),
             ],
           ),
 
@@ -197,10 +201,8 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
             color: Colors.teal,
             children: [
               _InfoRow(
-                  label: 'Coordinator',
-                  value: c['client_coordinator_name']),
-              _InfoRow(
-                  label: 'Notes', value: c['coordinator_notes']),
+                  label: 'Coordinator', value: c['client_coordinator_name']),
+              _InfoRow(label: 'Notes', value: c['coordinator_notes']),
             ],
           ),
 
@@ -210,8 +212,7 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
     );
   }
 
-  bool _hasValue(dynamic v) =>
-      v != null && v.toString().trim().isNotEmpty;
+  bool _hasValue(dynamic v) => v != null && v.toString().trim().isNotEmpty;
 
   bool _hasJsonContent(dynamic v) {
     if (v == null) return false;
@@ -305,8 +306,8 @@ class _ClientHeader extends StatelessWidget {
                 if (status != null && status.isNotEmpty) ...[
                   const SizedBox(height: 6),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 3),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                     decoration: BoxDecoration(
                       color: Colors.green.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(20),
@@ -316,7 +317,9 @@ class _ClientHeader extends StatelessWidget {
                     child: Text(
                       status,
                       style: const TextStyle(
-                          color: Colors.green, fontSize: 11, fontWeight: FontWeight.bold),
+                          color: Colors.green,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold),
                     ),
                   ),
                 ],
@@ -352,9 +355,8 @@ class _InfoSection extends StatelessWidget {
     final colorScheme = theme.colorScheme;
 
     // Filter out rows with no value
-    final visible = children
-        .where((w) => w is! _InfoRow || w.value != null)
-        .toList();
+    final visible =
+        children.where((w) => w is! _InfoRow || w.value != null).toList();
     if (visible.isEmpty) return const SizedBox.shrink();
 
     return Container(
@@ -369,8 +371,7 @@ class _InfoSection extends StatelessWidget {
         children: [
           // Section header
           Padding(
-            padding:
-                const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
             child: Row(
               children: [
                 Icon(icon, color: color, size: 18),
@@ -466,7 +467,9 @@ class _BoolBadge extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-                color: Colors.red.shade400, fontSize: 13, fontWeight: FontWeight.w600),
+                color: Colors.red.shade400,
+                fontSize: 13,
+                fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -555,16 +558,12 @@ class _EmergencyContactsSection extends StatelessWidget {
   List<Map<String, dynamic>> _parse() {
     try {
       if (data is List) {
-        return (data as List)
-            .whereType<Map<String, dynamic>>()
-            .toList();
+        return (data as List).whereType<Map<String, dynamic>>().toList();
       }
       if (data is String) {
         final decoded = jsonDecode(data);
         if (decoded is List) {
-          return decoded
-              .whereType<Map<String, dynamic>>()
-              .toList();
+          return decoded.whereType<Map<String, dynamic>>().toList();
         }
       }
     } catch (_) {}
@@ -575,7 +574,7 @@ class _EmergencyContactsSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    
+
     final contacts = _parse();
     if (contacts.isEmpty) return const SizedBox.shrink();
 
@@ -593,8 +592,7 @@ class _EmergencyContactsSection extends StatelessWidget {
             padding: EdgeInsets.fromLTRB(16, 14, 16, 10),
             child: Row(
               children: [
-                Icon(Icons.emergency_outlined,
-                    color: Colors.red, size: 18),
+                Icon(Icons.emergency_outlined, color: Colors.red, size: 18),
                 SizedBox(width: 8),
                 Text(
                   'Emergency Contacts',
@@ -624,16 +622,14 @@ class _EmergencyContactsSection extends StatelessWidget {
                   ),
                   if (contact['relationship'] != null)
                     _InfoRow(
-                        label: 'Relationship',
-                        value: contact['relationship']),
+                        label: 'Relationship', value: contact['relationship']),
                   if (contact['phone'] != null)
                     _InfoRow(label: 'Phone', value: contact['phone']),
                   if (contact['email'] != null)
                     _InfoRow(label: 'Email', value: contact['email']),
                   const SizedBox(height: 8),
                   if (idx < contacts.length - 1)
-                    Divider(
-                        height: 1, color: colorScheme.outlineVariant),
+                    Divider(height: 1, color: colorScheme.outlineVariant),
                 ],
               ),
             );

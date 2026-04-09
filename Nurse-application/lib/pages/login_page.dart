@@ -27,67 +27,36 @@ class _LoginPageState extends State<LoginPage> {
       final password = _passwordController.text.trim();
 
       if (email.isEmpty || password.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Please enter both email and password')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Please enter both email and password')));
         setState(() => _isLoading = false);
         return;
       }
 
       Map<String, dynamic>? employee;
-
       debugPrint('🔍 Attempting login for: $email');
 
-      // ✅ Step 1: Check Database directly for matching email and password
-      try {
-        final List<dynamic> dbResponse = await Supabase.instance.client
+      // ✅ Step 1: Login via Supabase Auth
+      final authResponse =
+          await Supabase.instance.client.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
+
+      final user = authResponse.user;
+      if (user != null) {
+        debugPrint('✅ Logged in via Supabase Auth as ${user.email}');
+
+        // ✅ Step 2: Fetch employee record
+        final List<dynamic> empResponse = await Supabase.instance.client
             .from(Tables.employee)
-            .select('emp_id, first_name, last_name, email, designation, image_url, Employee_status')
-            .eq('email', email)
-            .eq('password', password)
+            .select(
+                'emp_id, first_name, last_name, email, designation, image_url, Employee_status')
+            .eq('email', user.email ?? email)
             .limit(1);
 
-        if (dbResponse.isNotEmpty) {
-          employee = dbResponse.first as Map<String, dynamic>;
-          debugPrint('✅ Logged in via Database match as ${employee['email']}');
-
-          // Try to sign in with Supabase Auth silently (don't block if it fails)
-          try {
-            await Supabase.instance.client.auth.signInWithPassword(
-              email: email,
-              password: password,
-            );
-          } catch (_) {
-            debugPrint('⚠️ Supabase Auth failed silently.');
-          }
-        }
-      } catch (e) {
-        debugPrint('⚠️ Database direct auth login attempt issue: $e');
-      }
-
-      // ✅ Step 2: Fallback to Supabase Auth if DB match failed (Optional)
-      if (employee == null) {
-        try {
-          final authResponse = await Supabase.instance.client.auth.signInWithPassword(
-            email: email,
-            password: password,
-          );
-
-          final user = authResponse.user;
-          if (user != null) {
-            debugPrint('✅ Logged in via Supabase Auth as ${user.email}');
-
-            final List<dynamic> empResponse = await Supabase.instance.client
-                .from(Tables.employee)
-                .select('emp_id, first_name, last_name, email, designation, image_url, Employee_status')
-                .eq('email', user.email ?? email)
-                .limit(1);
-
-            if (empResponse.isNotEmpty) {
-              employee = empResponse.first as Map<String, dynamic>;
-            }
-          }
-        } catch (e) {
-          debugPrint('⚠️ Supabase Auth fallback failed: $e');
+        if (empResponse.isNotEmpty) {
+          employee = empResponse.first as Map<String, dynamic>;
         }
       }
 
@@ -108,10 +77,6 @@ class _LoginPageState extends State<LoginPage> {
       } catch (e) {
         debugPrint('⚠️ RLS link error: $e');
       }
-
-      // ✅ Step 3: Save employee session locally
-      await SessionManager.saveSession(employee);
-      debugPrint('💾 Session saved for employee: ${employee['email']}');
 
       // ✅ Navigate to dashboard
       if (mounted) {
@@ -142,179 +107,469 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
+  // ─────────────────────────────────────────────
+  //  UI ONLY — nothing below touches logic/API
+  // ─────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final screenHeight = MediaQuery.of(context).size.height;
 
-    final backgroundGradient = LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: isDark
-          ? [
-              const Color(0xFF0F2027),
-              const Color(0xFF203A43),
-              const Color(0xFF2C5364)
-            ]
-          : [const Color(0xFFE0F7FA), const Color(0xFF80DEEA)],
-    );
+    const accentTeal = Color(0xFF1D9E75);
+    const accentTealLight = Color(0xFF5DCAA5);
+    const accentGlow = Color(0x221D9E75);
+
+    final effectiveCard = isDark ? const Color(0xFF111E30) : Colors.white;
+    final effectiveTitle = isDark ? Colors.white : const Color(0xFF0B1628);
+    final effectiveSubtitle = const Color(0xFF8896A8);
+    final effectiveInputBg =
+        isDark ? const Color(0xFF18273D) : const Color(0xFFF3F7FB);
+    final effectiveInputBorder =
+        isDark ? const Color(0xFF243350) : const Color(0xFFDDE4EE);
+    final effectiveInputText = isDark ? Colors.white : const Color(0xFF0B1628);
+    final effectiveLabel = const Color(0xFF8896A8);
+
+    InputDecoration _field({
+      required String label,
+      required String hint,
+      required Widget prefix,
+      Widget? suffix,
+    }) =>
+        InputDecoration(
+          labelText: label,
+          labelStyle: TextStyle(
+              fontSize: 13, color: effectiveLabel, fontWeight: FontWeight.w500),
+          hintText: hint,
+          hintStyle: TextStyle(
+              color: effectiveLabel.withValues(alpha: 0.5), fontSize: 14),
+          prefixIcon: prefix,
+          suffixIcon: suffix,
+          filled: true,
+          fillColor: effectiveInputBg,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(color: effectiveInputBorder, width: 1),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: accentTeal, width: 1.5),
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(color: effectiveInputBorder, width: 1),
+          ),
+        );
 
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(gradient: backgroundGradient),
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            child: AnimationLimiter(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: AnimationConfiguration.toStaggeredList(
-                  duration: const Duration(milliseconds: 600),
-                  childAnimationBuilder: (widget) => SlideAnimation(
-                    verticalOffset: 50.0,
-                    child: FadeInAnimation(
-                      child: widget,
-                    ),
-                  ),
-                  children: [
-                    // Brand Logo/Icon
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: theme.cardTheme.color,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.1),
-                            blurRadius: 20,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
-                      ),
-                      child: Icon(
-                        Icons.medical_services_rounded,
-                        size: 64,
-                        color: theme.colorScheme.primary,
-                      ),
-                    ),
-                    const SizedBox(height: 32),
+      backgroundColor: const Color(0xFF0B1628),
+      body: Stack(
+        children: [
+          // ── Decorative background ─────────────────────────
+          Positioned.fill(
+            child: CustomPaint(painter: _BgPainter()),
+          ),
 
-                    // Main Card
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 400),
-                      child: Card(
-                        elevation: 8,
-                        shadowColor: Colors.black26,
-                        child: Padding(
-                          padding: const EdgeInsets.all(32.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Text(
-                                "Welcome Back",
-                                textAlign: TextAlign.center,
-                                style: theme.textTheme.headlineSmall?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: theme.colorScheme.onSurface,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                "ZaqenCare Assistance Portal",
-                                textAlign: TextAlign.center,
-                                style: theme.textTheme.bodyLarge?.copyWith(
-                                  color: theme.colorScheme.onSurface
-                                      .withValues(alpha: 0.6),
-                                ),
-                              ),
-                              const SizedBox(height: 32),
+          // ── Content ───────────────────────────────────────
+          SafeArea(
+            child: SingleChildScrollView(
+              physics: const ClampingScrollPhysics(),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: screenHeight),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 26),
+                  child: AnimationLimiter(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: AnimationConfiguration.toStaggeredList(
+                        duration: const Duration(milliseconds: 520),
+                        childAnimationBuilder: (widget) => SlideAnimation(
+                          verticalOffset: 30.0,
+                          child: FadeInAnimation(child: widget),
+                        ),
+                        children: [
+                          SizedBox(height: screenHeight * 0.06),
 
-                              // Email Input
-                              TextFormField(
-                                controller: _emailController,
-                                keyboardType: TextInputType.emailAddress,
-                                textInputAction: TextInputAction.next,
-                                decoration: const InputDecoration(
-                                  labelText: 'Email Address',
-                                  prefixIcon: Icon(Icons.email_outlined),
-                                  hintText: 'nurse@hospital.com',
-                                ),
+                          // ── Brand pill ────────────────────
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: accentGlow,
+                              borderRadius: BorderRadius.circular(30),
+                              border: Border.all(
+                                color: accentTeal.withValues(alpha: 0.25),
+                                width: 1,
                               ),
-                              const SizedBox(height: 20),
-
-                              // Password Input
-                              TextFormField(
-                                controller: _passwordController,
-                                obscureText: !_isPasswordVisible,
-                                textInputAction: TextInputAction.done,
-                                onFieldSubmitted: (_) => _signIn(),
-                                decoration: InputDecoration(
-                                  labelText: 'Password',
-                                  prefixIcon: const Icon(Icons.lock_outline),
-                                  suffixIcon: IconButton(
-                                    onPressed: () => setState(() =>
-                                        _isPasswordVisible =
-                                            !_isPasswordVisible),
-                                    icon: Icon(
-                                      _isPasswordVisible
-                                          ? Icons.visibility_outlined
-                                          : Icons.visibility_off_outlined,
-                                    ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 22,
+                                  height: 22,
+                                  decoration: BoxDecoration(
+                                    color: accentTeal,
+                                    borderRadius: BorderRadius.circular(7),
+                                  ),
+                                  child: const Icon(
+                                    Icons.medical_services_rounded,
+                                    size: 13,
+                                    color: Colors.white,
                                   ),
                                 ),
-                              ),
-                              const SizedBox(height: 32),
-
-                              // Sign In Button
-                              ElevatedButton(
-                                onPressed: _isLoading ? null : _signIn,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: theme.colorScheme.primary,
-                                  foregroundColor: Colors.white,
-                                  disabledBackgroundColor: theme
-                                      .colorScheme.primary
-                                      .withValues(alpha: 0.6),
-                                  disabledForegroundColor: Colors.white,
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 16),
-                                  shadowColor: theme.colorScheme.primary
-                                      .withValues(alpha: 0.4),
-                                  elevation: 6,
+                                const SizedBox(width: 8),
+                                const Text(
+                                  'ZaqenCare',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: accentTealLight,
+                                    letterSpacing: 0.3,
+                                  ),
                                 ),
-                                child: _isLoading
-                                    ? const SizedBox(
-                                        height: 24,
-                                        width: 24,
-                                        child: CircularProgressIndicator(
-                                          color: Colors.white,
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : const Text(
-                                        'Sign In',
-                                        style: TextStyle(
-                                            fontSize: 18, height: 1.0),
-                                      ),
+                              ],
+                            ),
+                          ),
+
+                          SizedBox(height: screenHeight * 0.032),
+
+                          // ── Hero text ─────────────────────
+                          const Text(
+                            'Staff\nPortal.',
+                            style: TextStyle(
+                              fontSize: 54,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                              height: 1.0,
+                              letterSpacing: -2,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Container(
+                                width: 24,
+                                height: 3,
+                                decoration: BoxDecoration(
+                                  color: accentTeal,
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Text(
+                                'Care Management System',
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  color: Colors.white.withValues(alpha: 0.4),
+                                  letterSpacing: 0.8,
+                                  fontWeight: FontWeight.w400,
+                                ),
                               ),
                             ],
                           ),
-                        ),
+
+                          SizedBox(height: screenHeight * 0.045),
+
+                          // ── Login card ────────────────────
+                          Container(
+                            decoration: BoxDecoration(
+                              color: effectiveCard,
+                              borderRadius: BorderRadius.circular(22),
+                              border: Border.all(
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.05)
+                                    : Colors.black.withValues(alpha: 0.04),
+                                width: 1,
+                              ),
+                            ),
+                            padding: const EdgeInsets.fromLTRB(22, 24, 22, 24),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                // Card top row
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Welcome back',
+                                            style: TextStyle(
+                                              fontSize: 19,
+                                              fontWeight: FontWeight.w700,
+                                              color: effectiveTitle,
+                                              letterSpacing: -0.4,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 3),
+                                          Text(
+                                            'Sign in to continue',
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              color: effectiveSubtitle,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    // Decorative dot cluster
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 2),
+                                      child: Column(
+                                        children: [
+                                          Row(children: [
+                                            _dot(accentTeal, 7),
+                                            const SizedBox(width: 4),
+                                            _dot(
+                                                accentTealLight.withValues(
+                                                    alpha: 0.35),
+                                                5),
+                                          ]),
+                                          const SizedBox(height: 4),
+                                          Row(children: [
+                                            _dot(
+                                                accentTealLight.withValues(
+                                                    alpha: 0.35),
+                                                5),
+                                            const SizedBox(width: 4),
+                                            _dot(
+                                                accentTeal.withValues(
+                                                    alpha: 0.25),
+                                                7),
+                                          ]),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 22),
+
+                                // Email field
+                                TextFormField(
+                                  controller: _emailController,
+                                  keyboardType: TextInputType.emailAddress,
+                                  textInputAction: TextInputAction.next,
+                                  style: TextStyle(
+                                      fontSize: 14, color: effectiveInputText),
+                                  decoration: _field(
+                                    label: 'Email address',
+                                    hint: 'nurse@hospital.com',
+                                    prefix: Icon(Icons.email_outlined,
+                                        size: 18, color: effectiveLabel),
+                                  ),
+                                ),
+                                const SizedBox(height: 13),
+
+                                // Password field
+                                TextFormField(
+                                  controller: _passwordController,
+                                  obscureText: !_isPasswordVisible,
+                                  textInputAction: TextInputAction.done,
+                                  onFieldSubmitted: (_) => _signIn(),
+                                  style: TextStyle(
+                                      fontSize: 14, color: effectiveInputText),
+                                  decoration: _field(
+                                    label: 'Password',
+                                    hint: '••••••••',
+                                    prefix: Icon(Icons.lock_outline,
+                                        size: 18, color: effectiveLabel),
+                                    suffix: IconButton(
+                                      onPressed: () => setState(() =>
+                                          _isPasswordVisible =
+                                              !_isPasswordVisible),
+                                      icon: Icon(
+                                        _isPasswordVisible
+                                            ? Icons.visibility_outlined
+                                            : Icons.visibility_off_outlined,
+                                        size: 18,
+                                        color: effectiveLabel,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+
+                                // Forgot password
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: TextButton(
+                                    onPressed: () {},
+                                    style: TextButton.styleFrom(
+                                      padding: EdgeInsets.zero,
+                                      minimumSize: Size.zero,
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                    child: const Text(
+                                      'Forgot password?',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: accentTeal,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 18),
+
+                                // Sign in button
+                                SizedBox(
+                                  height: 50,
+                                  child: ElevatedButton(
+                                    onPressed: _isLoading ? null : _signIn,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: accentTeal,
+                                      foregroundColor: Colors.white,
+                                      disabledBackgroundColor:
+                                          accentTeal.withValues(alpha: 0.45),
+                                      disabledForegroundColor: Colors.white,
+                                      elevation: 0,
+                                      shadowColor: Colors.transparent,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
+                                    ),
+                                    child: _isLoading
+                                        ? const SizedBox(
+                                            height: 20,
+                                            width: 20,
+                                            child: CircularProgressIndicator(
+                                              color: Colors.white,
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              Text(
+                                                'Sign in',
+                                                style: TextStyle(
+                                                  fontSize: 15,
+                                                  fontWeight: FontWeight.w600,
+                                                  letterSpacing: 0.2,
+                                                ),
+                                              ),
+                                              SizedBox(width: 8),
+                                              Icon(Icons.arrow_forward_rounded,
+                                                  size: 18),
+                                            ],
+                                          ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          SizedBox(height: screenHeight * 0.04),
+
+                          // ── Footer ────────────────────────
+                          Center(
+                            child: Text(
+                              '· ZaqenCare v1.0 ·',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.white.withValues(alpha: 0.2),
+                                letterSpacing: 1.8,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 24),
-                    Text(
-                      'ZaqenCare Care Management System v1.0',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: isDark ? Colors.white54 : Colors.grey.shade600,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
+
+  Widget _dot(Color color, double size) => Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      );
+}
+
+// ── Background painter ──────────────────────────────────────────────────────
+class _BgPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Base
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, size.width, size.height),
+      Paint()..color = const Color(0xFF0B1628),
+    );
+
+    // Large teal blob — top right
+    canvas.drawCircle(
+      Offset(size.width + 50, -70),
+      230,
+      Paint()
+        ..color = const Color(0xFF1D9E75).withValues(alpha: 0.13)
+        ..style = PaintingStyle.fill,
+    );
+
+    // Smaller inner blob
+    canvas.drawCircle(
+      Offset(size.width - 10, 50),
+      110,
+      Paint()
+        ..color = const Color(0xFF1D9E75).withValues(alpha: 0.08)
+        ..style = PaintingStyle.fill,
+    );
+
+    // Ring outline
+    canvas.drawCircle(
+      Offset(size.width + 50, -70),
+      270,
+      Paint()
+        ..color = const Color(0xFF1D9E75).withValues(alpha: 0.1)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+
+    // Subtle second ring
+    canvas.drawCircle(
+      Offset(size.width + 50, -70),
+      310,
+      Paint()
+        ..color = const Color(0xFF1D9E75).withValues(alpha: 0.05)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.8,
+    );
+
+    // Bottom-left dim blob
+    canvas.drawCircle(
+      Offset(-50, size.height + 30),
+      180,
+      Paint()
+        ..color = const Color(0xFF0F6E56).withValues(alpha: 0.07)
+        ..style = PaintingStyle.fill,
+    );
+
+    // Dot grid — upper portion only
+    final dotPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.035)
+      ..style = PaintingStyle.fill;
+    const spacing = 26.0;
+    for (double x = spacing; x < size.width; x += spacing) {
+      for (double y = spacing; y < size.height * 0.42; y += spacing) {
+        canvas.drawCircle(Offset(x, y), 1.1, dotPaint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_BgPainter old) => false;
 }

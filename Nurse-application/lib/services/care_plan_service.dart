@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import '../../main.dart';
 import '../models/shift_task_model.dart';
@@ -16,19 +17,27 @@ class CarePlanService {
       debugPrint('📥 One Query: Fetching ALL shifts today for emp=$empId');
 
       final now = DateTime.now();
-      final startOfToday = DateTime(now.year, now.month, now.day).toUtc().toIso8601String();
-      final tomorrow = DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
-      final endOfToday = DateTime(tomorrow.year, tomorrow.month, tomorrow.day).toUtc().toIso8601String();
+      final localToday = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
 
-      // We include 'clocked_in' to ensure active shifts are fetched
+      // We include 'Accepted' to ensure shifts accepted by the nurse show up.
       final response = await supabase
           .from('shift')
-          .select('*, client:client_final(*)')
+          .select('''
+*,
+client:client_final!fk_shift_client(
+  *,
+  care_plans(
+    *,
+    care_plan_tasks(*)
+  )
+)
+''')
           .eq('emp_id', empId)
-          .inFilter('shift_status', ['Scheduled', 'Assigned', 'clocked_in', 'Clocked in'])
-          .gte('shift_start_time', startOfToday)
-          .lt('shift_start_time', endOfToday)
+          .inFilter('shift_status', ['Scheduled', 'Assigned', 'Accepted', 'clocked_in', 'Clocked in'])
+          .eq('date', localToday)
           .order('shift_start_time');
+
+      print('Supabase Response: ${jsonEncode(response)}');
 
       return (response as List)
           .map((e) => Shift.fromJson(e as Map<String, dynamic>))

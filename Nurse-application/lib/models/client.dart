@@ -69,6 +69,9 @@ class Client {
   final dynamic emergencyContacts;
   final dynamic progressNotes;
   final dynamic administrativeNotes;
+  final double? latitude;
+  final double? longitude;
+  final List<CarePlan>? carePlans;
 
   Client({
     required this.id,
@@ -139,6 +142,9 @@ class Client {
     this.emergencyContacts,
     this.progressNotes,
     this.administrativeNotes,
+    this.latitude,
+    this.longitude,
+    this.carePlans,
   });
 
   factory Client.fromJson(Map<String, dynamic> json) {
@@ -234,6 +240,11 @@ class Client {
       emergencyContacts: json['emergency_contacts'],
       progressNotes: json['progress_notes'],
       administrativeNotes: json['administrative_notes'],
+      latitude: json['latitude'] != null ? (json['latitude'] as num).toDouble() : null,
+      longitude: json['longitude'] != null ? (json['longitude'] as num).toDouble() : null,
+      carePlans: (json['care_plans'] as List? ?? [])
+          .map((e) => CarePlan.fromJson(e as Map<String, dynamic>))
+          .toList(),
     );
   }
 
@@ -306,6 +317,15 @@ class Client {
       'emergency_contacts': emergencyContacts,
       'progress_notes': progressNotes,
       'administrative_notes': administrativeNotes,
+      'latitude': latitude,
+      'longitude': longitude,
+      'care_plans': carePlans?.map((e) => {
+        'care_plan_id': e.carePlanId,
+        'care_plan_tasks': e.tasks.map((t) => {
+          'task_id': t.taskId,
+          'task_name': t.taskName,
+        }).toList(),
+      }).toList(),
     };
   }
 
@@ -320,4 +340,24 @@ class Client {
 
   // Alias for backward compat (old code used `state`)
   String? get state => province;
+}
+
+class CarePlan {
+  final int carePlanId;
+  final List<CarePlanTask> tasks;
+
+  CarePlan.fromJson(Map<String, dynamic> json)
+      : carePlanId = json['care_plan_id'],
+        tasks = (json['care_plan_tasks'] as List? ?? [])
+            .map((e) => CarePlanTask.fromJson(e as Map<String, dynamic>))
+            .toList();
+}
+
+class CarePlanTask {
+  final int taskId;
+  final String taskName;
+
+  CarePlanTask.fromJson(Map<String, dynamic> json)
+      : taskId = json['task_id'],
+        taskName = json['task_name'] ?? '';
 }

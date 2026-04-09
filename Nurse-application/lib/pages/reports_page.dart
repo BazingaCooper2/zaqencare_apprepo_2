@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../main.dart';
 import '../models/employee.dart';
-import '../models/shift.dart';
-import '../models/daily_shift.dart';
 import 'package:nurse_tracking_app/services/session.dart';
+import '../services/analytics_service.dart';
 import '../widgets/custom_loading_screen.dart';
 
 class ReportsPage extends StatefulWidget {
@@ -22,6 +20,7 @@ class _ReportsPageState extends State<ReportsPage> {
   int _completed = 0;
   int _inProgress = 0;
   int _cancelled = 0;
+  int _tasksCompleted = 0;
   double _totalHours = 0;
   double _overtimeHours = 0;
   double _monthlyHours = 0;
@@ -36,10 +35,6 @@ class _ReportsPageState extends State<ReportsPage> {
 
   Future<void> _loadReports() async {
     try {
-      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-      final startOfMonth = DateFormat('yyyy-MM-dd')
-          .format(DateTime(DateTime.now().year, DateTime.now().month, 1));
-
       final empId = await SessionManager.getEmpId();
       if (empId == null) {
         if (mounted) {
@@ -54,112 +49,46 @@ class _ReportsPageState extends State<ReportsPage> {
         return;
       }
 
-      // Load shift data from shift table for status counts
-      final shiftsResponse = await supabase.from('shift').select('''
-            shift_id,
-            emp_id,
-            client_id,
-            shift_status,
-            shift_start_time,
-            shift_end_time,
-            start_ts,
-            clock_in,
-            clock_out,
-            date,
-            shift_type
-          ''').eq('emp_id', empId);
+      // Load analytics from analytics_daily
+      final metrics = await AnalyticsService.getPerformanceMetrics(empId);
 
-      int completed = 0;
-      int inProgress = 0;
-      int cancelled = 0;
-
-      for (final shiftData in shiftsResponse) {
-        final shift = Shift.fromJson(shiftData);
-        final status = shift.shiftStatus?.toLowerCase().replaceAll(' ', '_');
-
-        if (status == 'completed') {
-          completed++;
-        } else if (status == 'in_progress') {
-          inProgress++;
-        } else if (status == 'cancelled') {
-          cancelled++;
-        }
-      }
-
-      // Load daily_shift summary data
-      final dailyShiftsResponse =
-          await supabase.from('daily_shift').select().eq('emp_id', empId);
-
-      double totalHours = 0;
-      double overtimeHours = 0;
-      double monthlyHours = 0;
-
-      for (final dailyShiftData in dailyShiftsResponse) {
-        final dailyShift = DailyShift.fromJson(dailyShiftData);
-
-        // Sum total hours (convert from bigint to double)
-        if (dailyShift.dailyHrs != null) {
-          totalHours += dailyShift.dailyHrs!.toDouble();
-
-          // Check if it's today's shift
-          if (dailyShift.shiftDate == today) {
-            if (dailyShift.dailyHrs! > 8) {
-              overtimeHours += dailyShift.dailyHrs!.toDouble() - 8;
-            }
-          }
-
-          // Check if it's this month's shift
-          if (dailyShift.shiftDate.compareTo(startOfMonth) >= 0) {
-            monthlyHours += dailyShift.dailyHrs!.toDouble();
-          }
-        }
-      }
-
-      // Load daily hours for the past 7 days from daily_shift
-      final startDate = DateTime.now().subtract(const Duration(days: 7));
-      final startDateStr = DateFormat('yyyy-MM-dd').format(startDate);
-
-      final weeklyDailyShifts = await supabase
-          .from('daily_shift')
-          .select()
-          .eq('emp_id', empId)
-          .gte('shift_date', startDateStr);
-
-      Map<String, double> dailyHoursMap = {};
-      for (int i = 0; i < 7; i++) {
-        final date = DateTime.now().subtract(Duration(days: i));
-        final dateStr = DateFormat('yyyy-MM-dd').format(date);
-        dailyHoursMap[dateStr] = 0.0;
-      }
-
-      for (final dailyShiftData in weeklyDailyShifts) {
-        final dailyShift = DailyShift.fromJson(dailyShiftData);
-        if (dailyShift.dailyHrs != null) {
-          if (dailyHoursMap.containsKey(dailyShift.shiftDate)) {
-            dailyHoursMap[dailyShift.shiftDate] =
-                dailyHoursMap[dailyShift.shiftDate]! +
-                    dailyShift.dailyHrs!.toDouble();
-          }
-        }
-      }
-
+      // Map days (past 7 days)
       List<double> dailyHours = [];
       List<String> days = [];
+      Map<String, double> dayMap = {};
+      
+      final now = DateTime.now();
       for (int i = 6; i >= 0; i--) {
-        final date = DateTime.now().subtract(Duration(days: i));
+        final date = now.subtract(Duration(days: i));
         final dateStr = DateFormat('yyyy-MM-dd').format(date);
-        final dayStr = DateFormat('E').format(date); // Mon, Tue, etc.
+        final dayStr = DateFormat('E').format(date);
         days.add(dayStr);
-        dailyHours.add(dailyHoursMap[dateStr] ?? 0.0);
+        dayMap[dateStr] = 0.0;
+      }
+
+      final weeklyActivity = metrics['weeklyActivity'] as List;
+      for (var row in weeklyActivity) {
+        if (dayMap.containsKey(row['date'])) {
+          dayMap[row['date']] = (row['total_hours'] ?? 0).toDouble();
+        }
+      }
+
+      // Let's re-do the list generation correctly.
+      dailyHours = [];
+      for (int i = 6; i >= 0; i--) {
+        final date = now.subtract(Duration(days: i));
+        final dateStr = DateFormat('yyyy-MM-dd').format(date);
+        dailyHours.add(dayMap[dateStr] ?? 0.0);
       }
 
       setState(() {
-        _completed = completed;
-        _inProgress = inProgress;
-        _cancelled = cancelled;
-        _totalHours = totalHours;
-        _overtimeHours = overtimeHours;
-        _monthlyHours = monthlyHours;
+        _completed = metrics['completedShifts'] ?? 0;
+        _inProgress = metrics['shiftDistribution']['in_progress'] ?? 0;
+        _cancelled = metrics['shiftDistribution']['cancelled'] ?? 0;
+        _tasksCompleted = metrics['tasksCompleted'] ?? 0;
+        _totalHours = metrics['totalHours'] ?? 0;
+        _overtimeHours = metrics['overtimeHours'] ?? 0;
+        _monthlyHours = metrics['monthlyHours'] ?? 0;
         _dailyHours = dailyHours;
         _days = days;
         _loading = false;
@@ -170,6 +99,7 @@ class _ReportsPageState extends State<ReportsPage> {
           SnackBar(content: Text("Error loading reports: $e")),
         );
       }
+      setState(() => _loading = false);
     }
   }
 
@@ -235,6 +165,18 @@ class _ReportsPageState extends State<ReportsPage> {
                         color: Colors.green,
                         icon: Icons.task_alt,
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      _SummaryCard(
+                        title: "Tasks Completed",
+                        value: "$_tasksCompleted",
+                        color: Colors.blue,
+                        icon: Icons.assignment_turned_in,
+                      ),
+                      const Expanded(child: SizedBox()), // Placeholder for balance
                     ],
                   ),
 

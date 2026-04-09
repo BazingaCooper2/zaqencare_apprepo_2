@@ -3,7 +3,7 @@ description: ZaqenCare - Hospital nurse tracking application with GPS and schedu
 
 publish_to: 'none'
 
-version: 1.0.5+6  # ← UPDATED
+version: 1.9.3+10  # ← UPDATED
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -49,6 +49,28 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.13.1
+  flutter_native_splash: ^2.4.0   # ← ADDED FOR SPLASH
 
 flutter:
   uses-material-design: true
+
+  assets:
+    - assets/final_logo.jpeg
+    - assets/final_logo.jpeg   # ← ADDED
+
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/final_logo.jpeg"
+  adaptive_icon_background: "#ffffff"
+  adaptive_icon_foreground: "assets/final_logo.jpeg"
+
+flutter_native_splash:
+  color: "#ffffff"
+  image: assets/final_logo.jpeg
+  android: true
+  ios: true
+  android_gravity: center
+  ios_content_mode: scaleAspectFit
+  fullscreen: true

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -5,29 +6,31 @@ class SessionManager {
   static int? empId;
   static SupabaseClient get _supabase => Supabase.instance.client;
 
-  static Future<void> saveSession(Map<String, dynamic> employee) async {
-    final prefs = await SharedPreferences.getInstance();
-    empId = employee['emp_id'];
-    await prefs.setInt('emp_id', employee['emp_id']);
-    await prefs.setString('first_name', employee['first_name']);
-    await prefs.setString('last_name', employee['last_name']);
-    await prefs.setString('email', employee['email']);
-    await prefs.setString('designation', employee['designation'] ?? '');
-    await prefs.setString('image_url', employee['image_url'] ?? '');
-  }
-
   static Future<String> getFullName() async {
-    final prefs = await SharedPreferences.getInstance();
-    final first = prefs.getString('first_name') ?? '';
-    final last = prefs.getString('last_name') ?? '';
-    return '$first $last'.trim();
+    final user = _supabase.auth.currentUser;
+    if (user == null) return 'Nurse';
+
+    try {
+      final response = await _supabase
+          .from('employee')
+          .select('first_name, last_name')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+      if (response != null) {
+        final first = response['first_name'] ?? '';
+        final last = response['last_name'] ?? '';
+        return '$first $last'.trim();
+      }
+    } catch (e) {
+      debugPrint('⚠️ Error fetching full name: $e');
+    }
+    return 'Nurse';
   }
 
   static Future<int?> getEmpId() async {
     if (empId != null) return empId;
-    final prefs = await SharedPreferences.getInstance();
-    empId = prefs.getInt('emp_id');
-    return empId;
+    return await getOrCreateEmployeeLink();
   }
 
   static Future<void> clearSession() async {
@@ -81,8 +84,7 @@ class SessionManager {
       if (existingUserId == null || existingUserId != userId) {
         await _supabase
             .from('employee')
-            .update({'user_id': userId})
-            .eq('emp_id', id);
+            .update({'user_id': userId}).eq('emp_id', id);
 
         print("🔗 Employee linked to this auth user. emp_id: $id");
       }

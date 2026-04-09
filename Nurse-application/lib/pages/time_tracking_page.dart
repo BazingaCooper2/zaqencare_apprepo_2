@@ -1,12 +1,11 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:intl/intl.dart';
-import 'package:http/http.dart' as http;
 import '../main.dart';
 import 'package:nurse_tracking_app/models/employee.dart';
 import 'package:nurse_tracking_app/models/shift.dart';
@@ -15,7 +14,6 @@ import 'package:nurse_tracking_app/models/task_model.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:nurse_tracking_app/services/session.dart';
 import 'package:nurse_tracking_app/services/directions_service.dart';
-import 'package:nurse_tracking_app/config/api_config.dart';
 import '../constants/tables.dart';
 
 class TimeTrackingPage extends StatefulWidget {
@@ -54,9 +52,8 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
   bool _loadingActiveShift = false;
   List<Shift> _todayShifts = []; // New list for today's shifts
 
-  // Geocoded coordinates for the active client's address.
-  // client_final has no lat/lng column — coords are fetched via backend.
-  List<double>? _geocodedClientLatLng; // [lat, lng]
+  // Client coordinates are now directly in the Client model.
+  // No longer using runtime geocoding.
 
   // Task state
   List<Task> _tasks = [];
@@ -73,6 +70,8 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
   String? _routeDistance;
   String? _routeDuration;
   int? _subscribedShiftId; // NEW: To prevent redundant streams loop
+  final TextEditingController _progressNoteController = TextEditingController();
+  bool _isSavingNote = false;
 
   // Assisted-Living locations with 50m geofence
   static const Map<String, LatLng> _locations = {
@@ -110,17 +109,26 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
       final empId = await SessionManager.getEmpId();
       if (empId == null) return;
 
-      // 1. Direct Query on 'shift' table (User's specific request for session restoration)
-      // This ensures we find the active shift even if it started on a different day.
       final activeShiftData = await supabase
           .from('shift')
-          .select('*, client(*)')
+          .select('''
+*,
+client:client_final!fk_shift_client(
+  *,
+  care_plans(
+    *,
+    care_plan_tasks(*)
+  )
+)
+''')
           .eq('emp_id', empId)
           .not('clock_in', 'is', null)
           .filter('clock_out', 'is', null)
           .order('clock_in', ascending: false)
           .limit(1)
           .maybeSingle();
+
+      print('Shift Data Response: ${jsonEncode(activeShiftData)}');
 
       if (activeShiftData != null && mounted) {
         final shift = Shift.fromJson(activeShiftData);
@@ -151,7 +159,19 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
         // Fallback: Check time_logs if shift table didn't have the explicit clock_in/out
         final response = await supabase
             .from('time_logs')
-            .select('*, shift(*, client(*))')
+            .select('''
+*,
+shift(
+  *,
+  client:client_final!fk_shift_client(
+    *,
+    care_plans(
+      *,
+      care_plan_tasks(*)
+    )
+  )
+)
+''')
             .eq('emp_id', empId)
             .filter('clock_out_time', 'is', null)
             .maybeSingle();
@@ -183,6 +203,7 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
     _tasksRealtimeSubscription?.cancel();
     _shiftRealtimeSubscription?.cancel();
     _mapController?.dispose();
+    _progressNoteController.dispose();
     super.dispose();
   }
 
@@ -193,17 +214,28 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
       final todayStr = now.toIso8601String().substring(0, 10);
       
       // BROAD FETCH: match all across time to ensure timezone safety
-      // Using explicit alias 'client:client_final(*)' to match Shift model expectations
+      // Using explicit alias 'client:client_final!fk_shift_client(*)' to match Shift model expectations
       final response = await supabase
           .from('shift')
-          .select('*, client:client_final(*)')
+          .select('''
+*,
+client:client_final!fk_shift_client(
+  *,
+  care_plans(
+    *,
+    care_plan_tasks(*)
+  )
+)
+''')
           .eq('emp_id', empId)
+          .eq('date', todayStr)
           .or('shift_mode.eq.individual,parent_block_id.not.is.null');
 
-      debugPrint('📅 Found ${response.length} shift(s) (with client details) for emp $empId');
+      print('Today Shifts Response: ${jsonEncode(response)}');
+
+      debugPrint('📅 Found ${response.length} shift(s) for emp $empId today ($todayStr)');
 
       if (response.isEmpty) {
-        debugPrint('⚠️ No assigned individual/child shifts found for emp $empId at all.');
         return [];
       }
 
@@ -270,7 +302,19 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
       // 2. If scheduleId is passed, use that as the target instead of all today's shifts
       Shift? targetShift;
       if (widget.scheduleId != null) {
-          final sResp = await supabase.from('shift').select('*, client:client_final(*)').eq('shift_id', widget.scheduleId!).maybeSingle();
+          final sResp = await supabase.from('shift').select('''
+*,
+client:client_final!fk_shift_client(
+  *,
+  care_plans(
+    *,
+    care_plan_tasks(*)
+  )
+)
+''').eq('shift_id', widget.scheduleId!).maybeSingle();
+          
+          print('Target Shift Response: ${jsonEncode(sResp)}');
+          
           if (sResp != null) {
               targetShift = Shift.fromJson(sResp);
           }
@@ -338,23 +382,23 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
         }
       }
 
-      if (client != null && client.fullAddress.isNotEmpty) {
-        _fetchCoordinatesFromBackend(client.fullAddress).then((coords) {
-          if (coords != null && mounted) {
-            setState(() {
-              _geocodedClientLatLng = [
-                (coords['latitude'] as num).toDouble(),
-                (coords['longitude'] as num).toDouble()
-              ];
-            });
-            _setupMapMarkersAndCircles();
-          }
-        });
+      if (client != null && client.latitude != null && client.longitude != null) {
+        _setupMapMarkersAndCircles();
       }
 
       setState(() {
         _activeClient = client;
         _loadingActiveShift = false;
+        
+        // Verification Prints
+        final List<CarePlan>? plans = _activeClient?.carePlans;
+        print("CarePlans: ${plans?.length ?? 0}");
+        if (plans != null && plans.isNotEmpty) {
+           print("Tasks: ${plans[0].tasks.length}");
+        } else {
+           print("Tasks: 0");
+        }
+        
         final status = shift.shiftStatus?.toLowerCase().replaceAll(' ', '_');
         if (status == 'clocked_in' ||
             status == 'active' ||
@@ -369,6 +413,8 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
 
       if (_currentPosition != null && client != null) {
         _updateRouteToClient();
+        // Handle race condition: check geofence now that client coordinates are available
+        _checkGeofenceEntry(_currentPosition!);
       }
 
       // OPTIMIZATION: Only (re)subscribe if the shift has actually changed
@@ -451,38 +497,50 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
       locationSettings: locationSettings,
     ).listen(
       (Position position) async {
-        debugPrint(
-            '📍 Location stream: ${position.latitude}, ${position.longitude} (accuracy: ${position.accuracy}m)');
-
         if (!mounted) return;
+        
+        debugPrint('📍 GPS Update: ${position.latitude}, ${position.longitude}');
 
-        setState(() {
-          _currentPosition = position;
-        });
+        double distanceMoved = 0.0;
+        if (_currentPosition != null) {
+          distanceMoved = Geolocator.distanceBetween(
+            _currentPosition!.latitude,
+            _currentPosition!.longitude,
+            position.latitude,
+            position.longitude,
+          );
+        }
+
+        // 1. ALWAYS update current position state for business logic
+        _currentPosition = position;
+
+        // 2. ONLY throttle UI/Map heavy operations
+        bool skipUIUpdate = distanceMoved < 2.0 && _hasCenteredOnUser;
+        if (!skipUIUpdate) {
+          setState(() {
+            _updateMapMarkers(position);
+            // Center camera on user location first time
+            if (!_hasCenteredOnUser && _mapController != null) {
+              _mapController!.animateCamera(
+                CameraUpdate.newLatLngZoom(
+                  LatLng(position.latitude, position.longitude),
+                  16,
+                ),
+              );
+              _hasCenteredOnUser = true;
+              debugPrint('🎯 Centered map on user location');
+            }
+          });
+        }
+
+        // 3. ALWAYS execute geofence logic regardless of movement throttle
+        await _checkGeofenceEntry(position);
 
         // Update address in background if not already set — never block the stream
         if (_currentAddress == null) {
           _reverseGeocode(position.latitude, position.longitude)
               .then((addr) => _currentAddress ??= addr);
         }
-
-        // Center camera on user location first time
-        if (!_hasCenteredOnUser && _mapController != null) {
-          await _mapController!.animateCamera(
-            CameraUpdate.newLatLngZoom(
-              LatLng(position.latitude, position.longitude),
-              16,
-            ),
-          );
-          _hasCenteredOnUser = true;
-          debugPrint('🎯 Centered map on user location');
-        }
-
-        // Check for geofence entry at assisted living locations
-        await _checkGeofenceEntry(position);
-
-        // Update map markers
-        _updateMapMarkers();
       },
       onError: (error) {
         debugPrint('❌ Location stream error: $error');
@@ -495,19 +553,19 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
     // 1. Check if we are inside ANY monitored location
     String? detectedPlace;
     double? distToPlace;
+    debugPrint('🎯 Geofence Check Triggered...');
 
     // Check dynamic client location (Active Shift)
     if (_activeClient != null) {
-      // Use geocoded coords from state (client_final has no lat/lng column)
-      final coords = _geocodedClientLatLng;
-      if (coords != null && coords.length >= 2) {
-        final clientLat = coords[0];
-        final clientLng = coords[1];
+      final clientLat = _activeClient?.latitude;
+      final clientLng = _activeClient?.longitude;
+
+      if (clientLat != null && clientLng != null) {
         final dist = _calculateDistance(
             position.latitude, position.longitude, clientLat, clientLng);
 
+        debugPrint('📏 Distance to ${_activeClient!.fullName}: ${dist.toStringAsFixed(1)}m');
         if (dist <= _geofenceRadius) {
-          // Use client name as the detected place
           detectedPlace = _activeClient!.fullName;
           distToPlace = dist;
           debugPrint(
@@ -562,30 +620,8 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
         // Apply a small "exit buffer" to prevent jitter (e.g. GPS drift at the edge)
         // Check distance to the place we are supposedly clocked in at
         bool confirmedOutside = true;
-        double? targetLat, targetLng;
-
-        if (_currentPlaceName != null) {
-          // Check static locations
-          if (_locations.containsKey(_currentPlaceName)) {
-            targetLat = _locations[_currentPlaceName]!.latitude;
-            targetLng = _locations[_currentPlaceName]!.longitude;
-          }
-          // Check dynamic client location (match loosely by name or if we just assume current client)
-          else if (_activeClient != null) {
-            // If the current place name matches service type or client name
-            final sType = _activeClient!.serviceType ?? '';
-            final cName = _activeClient!.fullName;
-
-            if (_currentPlaceName == sType || _currentPlaceName == cName) {
-              // Use geocoded coords from state
-              final coords = _geocodedClientLatLng;
-              if (coords != null && coords.length >= 2) {
-                targetLat = coords[0];
-                targetLng = coords[1];
-              }
-            }
-          }
-        }
+        final targetLat = _activeClient?.latitude;
+        final targetLng = _activeClient?.longitude;
 
         if (targetLat != null && targetLng != null) {
           final dist = _calculateDistance(
@@ -595,10 +631,6 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
           if (dist <= _geofenceRadius + 20) {
             confirmedOutside = false;
           }
-        } else {
-          // Should we clock out if we can't verify location?
-          // Probably yes, but safer to assume we are "lost" rather than "left".
-          // However, for strict geofencing, if we don't know where we are supposed to be, maybe we shouldn't have clocked in.
         }
 
         if (confirmedOutside && targetLat != null) {
@@ -611,19 +643,10 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
   }
 
   Future<void> _updateRouteToClient() async {
-    if (_activeClient == null) return;
+    final destinationLat = _activeClient?.latitude;
+    final destinationLng = _activeClient?.longitude;
 
-    // Use geocoded coords stored in state
-    final coordinates = _geocodedClientLatLng;
-
-    if (coordinates == null || coordinates.length < 2) return;
-
-    // Only try backend route if we have positions.
-    // This function will NOT launch external maps automatically.
-    if (_currentPosition == null) return;
-
-    final destinationLat = coordinates[0];
-    final destinationLng = coordinates[1];
+    if (destinationLat == null || destinationLng == null) return;
 
     try {
       final directionsService = DirectionsService();
@@ -671,17 +694,17 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
       debugPrint('Error updating route: $e');
     }
   }
-
   Future<void> _launchExternalMaps() async {
     if (_activeClient == null) return;
 
-    final coordinates = _geocodedClientLatLng; // Use geocoded state
+    final clientLat = _activeClient?.latitude;
+    final clientLng = _activeClient?.longitude;
     String url;
 
-    if (coordinates != null && coordinates.length >= 2) {
-      // Use geocoded coordinates
+    if (clientLat != null && clientLng != null) {
+      // Use coordinates from client
       url =
-          'https://www.google.com/maps/dir/?api=1&destination=${coordinates[0]},${coordinates[1]}';
+          'https://www.google.com/maps/dir/?api=1&destination=$clientLat,$clientLng';
     } else if (_activeClient!.fullAddress.isNotEmpty) {
       // Use address
       final encodedAddress = Uri.encodeComponent(_activeClient!.fullAddress);
@@ -1088,13 +1111,13 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
           .any((k) => k.toLowerCase() == clientServiceType.toLowerCase());
 
       if (!isKnownLocation) {
-        // Use geocoded state coords for dynamic client marker
-        final coordinates = _geocodedClientLatLng;
-        if (coordinates != null && coordinates.length >= 2) {
+        final clientLat = _activeClient?.latitude;
+        final clientLng = _activeClient?.longitude;
+        if (clientLat != null && clientLng != null) {
           _markers.add(
             Marker(
               markerId: const MarkerId('patient_destination'),
-              position: LatLng(coordinates[0], coordinates[1]),
+              position: LatLng(clientLat, clientLng),
               infoWindow: InfoWindow(
                 title: _activeClient!.fullName,
                 snippet: _activeClient!.fullAddress,
@@ -1108,7 +1131,7 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
           _circles.add(
             Circle(
               circleId: const CircleId('patient_geofence'),
-              center: LatLng(coordinates[0], coordinates[1]),
+              center: LatLng(clientLat, clientLng),
               radius: _geofenceRadius,
               strokeWidth: 2,
               strokeColor: Colors.green,
@@ -1120,22 +1143,17 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
     }
   }
 
-  void _updateMapMarkers() {
-    if (_currentPosition == null) return;
-
-    // Add user location marker
+  void _updateMapMarkers(Position position) {
+    // Optimization: Avoid full set recreation, update only the user marker
     final userMarker = Marker(
       markerId: const MarkerId('user_location'),
-      position: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
+      position: LatLng(position.latitude, position.longitude),
       infoWindow: const InfoWindow(title: 'Your Location'),
       icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
     );
 
-    setState(() {
-      _markers
-          .removeWhere((marker) => marker.markerId.value == 'user_location');
-      _markers.add(userMarker);
-    });
+    _markers.removeWhere((marker) => marker.markerId.value == 'user_location');
+    _markers.add(userMarker);
   }
 
   Future<void> _moveCameraToUser() async {
@@ -1169,14 +1187,36 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
       if (_activeShift!.taskId != null && _activeShift!.taskId!.contains(',')) {
         initialTasks = Task.fromCommaSeparated(_activeShift!.taskId,
             shiftId: _activeShift!.shiftId);
-      } else if (_activeClient != null && _activeClient!.tasks != null) {
-        initialTasks = Task.fromClientTasksJson(_activeClient!.tasks,
-            shiftId: _activeShift!.shiftId);
+      } else if (_activeClient?.carePlans != null &&
+          _activeClient!.carePlans!.isNotEmpty) {
+        // NEW: Load from care plans
+        for (var plan in _activeClient!.carePlans!) {
+          for (var t in plan.tasks) {
+            initialTasks.add(Task(
+              taskId: t.taskId,
+              shiftId: _activeShift!.shiftId,
+              details: t.taskName,
+              status: false,
+              isFromClient: true,
+            ));
+          }
+        }
+      } else if (_activeClient?.tasks != null) {
+        initialTasks = Task.fromClientTasksJson(
+          _activeClient!.tasks,
+          shiftId: _activeShift!.shiftId,
+        );
       } else if (_activeShift!.clientId != null) {
         try {
           final clientResponse = await supabase
               .from(Tables.client)
-              .select('tasks')
+              .select('''
+*,
+care_plans(
+  *,
+  care_plan_tasks(*)
+)
+''')
               .eq('id', _activeShift!.clientId!)
               .maybeSingle();
           if (clientResponse != null && clientResponse['tasks'] != null) {
@@ -1184,7 +1224,11 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
                 shiftId: _activeShift!.shiftId);
           }
         } catch (_) {}
+
       }
+
+      print("CarePlans: ${_activeClient?.carePlans?.length}");
+      print("Tasks loaded: ${initialTasks.length}");
 
       // 2. Fetch fully committed tasks live from the database
       final liveTasksResponse = await supabase
@@ -1722,6 +1766,83 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
     return degrees * (pi / 180);
   }
 
+  Future<void> _saveProgressNote() async {
+    final noteText = _progressNoteController.text.trim();
+    if (noteText.isEmpty) {
+      _showSnackBar('Please enter a note before saving.', isError: true);
+      return;
+    }
+
+    if (_activeClient == null) {
+      _showSnackBar('No active client found.', isError: true);
+      return;
+    }
+
+    setState(() => _isSavingNote = true);
+    debugPrint('📝 Saving progress note: $noteText');
+
+    try {
+      final empId = await SessionManager.getEmpId();
+      if (empId == null) {
+        _showSnackBar('Session error. Please login again.', isError: true);
+        setState(() => _isSavingNote = false);
+        return;
+      }
+
+      // 1. Fetch existing progress_notes
+      final response = await supabase
+          .from('client_final')
+          .select('progress_notes')
+          .eq('id', _activeClient!.id)
+          .single();
+
+      Map<String, dynamic> progressNotes = {};
+      if (response['progress_notes'] != null) {
+        progressNotes = Map<String, dynamic>.from(response['progress_notes']);
+      }
+
+      // 2. Prepare new entry
+      final now = DateTime.now();
+      final dateKey = DateFormat('yyyy-MM-dd').format(now);
+      final timeStr = DateFormat('HH:mm').format(now);
+
+      final newEntry = {
+        'note': noteText,
+        'time': timeStr,
+        'nurse_id': empId,
+      };
+
+      // 3. Update locally
+      if (!progressNotes.containsKey(dateKey)) {
+        progressNotes[dateKey] = [];
+      }
+      (progressNotes[dateKey] as List).add(newEntry);
+
+      debugPrint('📤 Sending final JSON: ${jsonEncode(progressNotes)}');
+
+      // 4. Update Supabase
+      await supabase
+          .from('client_final')
+          .update({'progress_notes': progressNotes})
+          .eq('id', _activeClient!.id);
+
+      debugPrint('✅ Progress note updated successfully');
+      _showSnackBar('Progress note saved');
+      _progressNoteController.clear();
+      
+      // Update local state if necessary (though it will be fetched next time)
+      // Since we don't have a local progressNotes list displayed, clearing the text is enough.
+      
+    } catch (e) {
+      debugPrint('❌ Error saving progress note: $e');
+      _showSnackBar('Failed to save note: $e', isError: true);
+    } finally {
+      if (mounted) {
+        setState(() => _isSavingNote = false);
+      }
+    }
+  }
+
   Future<String> _reverseGeocode(double latitude, double longitude) async {
     try {
       final placemarks = await placemarkFromCoordinates(latitude, longitude);
@@ -1763,9 +1884,9 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
   }
 
   LatLng _getInitialCameraPosition() {
-    // If we have geocoded client location, center there
-    if (_geocodedClientLatLng != null && _geocodedClientLatLng!.length >= 2) {
-      return LatLng(_geocodedClientLatLng![0], _geocodedClientLatLng![1]);
+    // If we have client coordinates, center there
+    if (_activeClient?.latitude != null && _activeClient?.longitude != null) {
+      return LatLng(_activeClient!.latitude!, _activeClient!.longitude!);
     }
 
     // Average of the three assisted living locations
@@ -1785,51 +1906,51 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
 
   Future<void> _moveCameraToClient() async {
     if (_mapController != null &&
-        _geocodedClientLatLng != null &&
-        _geocodedClientLatLng!.length >= 2) {
+        _activeClient?.latitude != null &&
+        _activeClient?.longitude != null) {
       await _mapController!.animateCamera(
         CameraUpdate.newLatLngZoom(
-          LatLng(_geocodedClientLatLng![0], _geocodedClientLatLng![1]),
+          LatLng(_activeClient!.latitude!, _activeClient!.longitude!),
           18, // High zoom for precision
         ),
       );
     }
   }
 
-  Future<Map<String, double>?> _fetchCoordinatesFromBackend(
-      String address) async {
-    try {
-      final uri = Uri.parse(ApiConfig.geocodeUrl);
+  // No longer using runtime geocoding service.
+  // Coordinates are fetched directly from the database during client load.
 
-      debugPrint('🌍 Calling Geocode API: $uri for "$address"');
-
-      final response = await http
-          .post(
-            uri,
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'address': address}),
-          )
-          .timeout(const Duration(seconds: 5));
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return {
-          'latitude': (data['latitude'] as num).toDouble(),
-          'longitude': (data['longitude'] as num).toDouble(),
-        };
-      } else {
-        debugPrint(
-            '⚠️ Geocode API Error: ${response.statusCode} ${response.body}');
-      }
-    } catch (e) {
-      debugPrint('❌ Network Error (Geocoding): $e');
-    }
-    return null;
+  Widget _buildGoogleMap() {
+    return GoogleMap(
+      initialCameraPosition: CameraPosition(
+        target: _getInitialCameraPosition(),
+        zoom: 15,
+      ),
+      markers: _markers,
+      circles: _circles,
+      polylines: _polylines,
+      onMapCreated: (controller) async {
+        _mapController = controller;
+        // Center on user location if already available
+        if (_currentPosition != null && !_hasCenteredOnUser) {
+          await controller.animateCamera(
+            CameraUpdate.newLatLngZoom(
+              LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
+              16,
+            ),
+          );
+          _hasCenteredOnUser = true;
+        }
+      },
+      myLocationEnabled: _currentPosition != null,
+      myLocationButtonEnabled: false,
+      zoomControlsEnabled: false,
+      padding: const EdgeInsets.only(bottom: 280),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    debugPrint('🎨 Redrawing TimeTrackingScreen (activeShift: ${_activeShift?.shiftId}, todayShifts: ${_todayShifts.length}, loading: $_loadingActiveShift)');
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
@@ -1860,34 +1981,7 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
       body: Stack(
         children: [
           // 1. Full Screen Map
-          GoogleMap(
-            initialCameraPosition: CameraPosition(
-              target: _getInitialCameraPosition(),
-              zoom: 15,
-            ),
-            markers: _markers,
-            circles: _circles,
-            polylines: _polylines,
-            onMapCreated: (controller) async {
-              _mapController = controller;
-              // Center on user location if already available
-              if (_currentPosition != null && !_hasCenteredOnUser) {
-                await controller.animateCamera(
-                  CameraUpdate.newLatLngZoom(
-                    LatLng(_currentPosition!.latitude,
-                        _currentPosition!.longitude),
-                    16,
-                  ),
-                );
-                _hasCenteredOnUser = true;
-              }
-            },
-            myLocationEnabled: _currentPosition != null,
-            myLocationButtonEnabled: false,
-            zoomControlsEnabled: false,
-            // Add padding to map to avoid bottom sheet covering google logo/controls
-            padding: const EdgeInsets.only(bottom: 280),
-          ),
+          _buildGoogleMap(),
 
           // 2. Map Overlay Controls (Recenter FAB)
           Positioned(
@@ -1896,7 +1990,7 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (_geocodedClientLatLng != null) ...[
+                if (_activeClient?.latitude != null) ...[
                   FloatingActionButton(
                     heroTag: 'client_loc_fab',
                     onPressed: _moveCameraToClient,
@@ -2342,8 +2436,8 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
                                               ),
                                             ],
                                             if (_currentPosition != null &&
-                                                _geocodedClientLatLng !=
-                                                    null) ...[
+                                                _activeClient?.latitude != null &&
+                                                _activeClient?.longitude != null) ...[
                                               const SizedBox(height: 4),
                                               Row(
                                                 children: [
@@ -2362,10 +2456,8 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
                                                                   .latitude,
                                                               _currentPosition!
                                                                   .longitude,
-                                                              _geocodedClientLatLng![
-                                                                  0],
-                                                              _geocodedClientLatLng![
-                                                                  1],
+                                                              _activeClient!.latitude!,
+                                                              _activeClient!.longitude!,
                                                             ) / 1000).toStringAsFixed(2)} km away',
                                                     style: TextStyle(
                                                       color:
@@ -2471,12 +2563,8 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
                                     ),
                                   )
                                 else
-                                  ListView.builder(
-                                    shrinkWrap: true,
-                                    physics:
-                                        const NeverScrollableScrollPhysics(),
-                                    itemCount: _tasks.length,
-                                    itemBuilder: (context, index) {
+                                  Column(
+                                    children: List.generate(_tasks.length, (index) {
                                       final task = _tasks[index];
                                       return Column(
                                         crossAxisAlignment:
@@ -2584,8 +2672,70 @@ class _TimeTrackingPageState extends State<TimeTrackingPage> {
                                             ),
                                         ],
                                       );
-                                    },
+                                    }),
                                   ),
+                                // Progress Note Section
+                                const Divider(height: 32),
+                                const Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    'Progress Note',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                TextField(
+                                  controller: _progressNoteController,
+                                  maxLines: 4,
+                                  decoration: InputDecoration(
+                                    hintText: 'Enter clinical progress note...',
+                                    hintStyle: TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.grey.shade400),
+                                    fillColor: Colors.grey.shade50,
+                                    filled: true,
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide(
+                                          color: Colors.grey.shade200),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide(
+                                          color: Colors.grey.shade200),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                ElevatedButton(
+                                  onPressed:
+                                      _isSavingNote ? null : _saveProgressNote,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.blue.shade700,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 14),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    elevation: 0,
+                                  ),
+                                  child: _isSavingNote
+                                      ? const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                              color: Colors.white,
+                                              strokeWidth: 2))
+                                      : const Text('Save Note',
+                                          style: TextStyle(
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.bold)),
+                                ),
+                                const SizedBox(height: 20),
                               ],
                             ),
                         ],

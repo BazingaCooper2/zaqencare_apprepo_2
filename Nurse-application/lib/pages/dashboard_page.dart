@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -17,7 +18,6 @@ import '../services/shift_offer_helper.dart';
 import 'shift_offers_page.dart';
 import '../widgets/custom_loading_screen.dart';
 import '../constants/tables.dart';
-
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -38,23 +38,37 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Future<void> _loadEmployeeData() async {
     try {
-      final empId = await SessionManager.getEmpId();
-      if (empId == null) {
-        setState(() {
-          _isLoading = false;
-        });
+      final user = supabase.auth.currentUser;
+      if (user == null) {
+        setState(() => _isLoading = false);
         return;
       }
 
-      final response = await supabase
+      // Step 1: Try fetch using user_id
+      final userIdResponse = await supabase
           .from(Tables.employee)
           .select()
-          .eq('emp_id', empId)
-          .maybeSingle();
+          .eq('user_id', user.id)
+          .limit(1);
 
-      if (response != null) {
+      var employeeData =
+          (userIdResponse as List).isNotEmpty ? userIdResponse.first : null;
+
+      // Step 2: Fallback → fetch using email if needed
+      if (employeeData == null && user.email != null) {
+        final emailResponse = await supabase
+            .from(Tables.employee)
+            .select()
+            .eq('email', user.email!)
+            .limit(1);
+
+        employeeData =
+            (emailResponse as List).isNotEmpty ? emailResponse.first : null;
+      }
+
+      if (employeeData != null) {
         setState(() {
-          _employee = Employee.fromJson(response);
+          _employee = Employee.fromJson(employeeData as Map<String, dynamic>);
           _isLoading = false;
         });
 
@@ -92,10 +106,16 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Future<void> _signOut() async {
     try {
-      // Dispose shift offer system first
+      // ✅ Step 1: Supabase logout
+      await supabase.auth.signOut(scope: SignOutScope.global);
+
+      // Dispose shift offer system
       disposeShiftOfferSystem();
 
+      // ✅ Step 2: Clear local session
       await SessionManager.clearSession();
+
+      // ✅ Step 3: Navigate to login
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (context) => const LoginPage()),
@@ -168,10 +188,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Theme.of(context)
-                        .colorScheme
-                        .primary
-                        .withOpacity(0.05),
+                    Theme.of(context).colorScheme.primary.withOpacity(0.05),
                     Theme.of(context).colorScheme.surface,
                   ],
                 ),
@@ -210,7 +227,7 @@ class _DashboardPageState extends State<DashboardPage> {
                             ),
                             const SizedBox(height: 16),
 
-                             const SizedBox(height: 16),
+                            const SizedBox(height: 16),
 
                             Row(
                               children: [
@@ -222,9 +239,8 @@ class _DashboardPageState extends State<DashboardPage> {
                                     onTap: () {
                                       Navigator.of(context).push(
                                         MaterialPageRoute(
-                                          builder: (context) =>
-                                              ClockInOutPage(
-                                                  employee: _employee!),
+                                          builder: (context) => ClockInOutPage(
+                                              employee: _employee!),
                                         ),
                                       );
                                     },
@@ -430,7 +446,10 @@ class _DashboardCard extends StatelessWidget {
                 Text(
                   subtitle!,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withOpacity(0.7),
                       ),
                 ),
               ],

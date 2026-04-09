@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../models/employee.dart';
 import '../models/shift.dart';
@@ -38,13 +39,24 @@ class _ClockInOutPageState extends State<ClockInOutPage> {
       // 1. Check for active shift
       final activeResponse = await supabase
           .from('shift')
-          .select('*, client:client_final(*)')
+          .select('''
+*,
+client:client_final!fk_shift_client(
+  *,
+  care_plans(
+    *,
+    care_plan_tasks(*)
+  )
+)
+''')
           .eq('emp_id', widget.employee.empId)
           .not('clock_in', 'is', null)
           .filter('clock_out', 'is', null)
           .order('clock_in', ascending: false)
           .limit(1)
           .maybeSingle();
+      
+      print('Active Response: ${jsonEncode(activeResponse)}');
       
       _clockedInShift = activeResponse != null ? Shift.fromJson(activeResponse) : null;
 

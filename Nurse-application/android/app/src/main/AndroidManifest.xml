@@ -1,32 +1,36 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     package="com.nursetracker.app">
 
     <!-- ===================== -->
     <!-- Permissions -->
     <!-- ===================== -->
 
-    <!-- Internet (required for Maps) -->
+    <!-- Internet -->
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <!-- Location permissions -->
+    <!-- Location -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-
-    <!-- Optional background location (only if you truly need it) -->
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 
-    <!-- Foreground service for continuous tracking -->
+    <!-- Foreground service for live tracking -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
 
-    <!-- Wake lock -->
+    <!-- Wake lock (keep tracking alive) -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
-    <!-- Phone call (SOS feature) -->
+    <!-- SOS call feature -->
     <uses-permission android:name="android.permission.CALL_PHONE" />
 
-    <!-- Android 13+ notifications -->
+    <!-- Notifications (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Remove Advertising ID permission added by libraries -->
+    <uses-permission
+        android:name="com.google.android.gms.permission.AD_ID"
+        tools:node="remove"/>
 
     <!-- ===================== -->
     <!-- Application -->
@@ -38,17 +42,12 @@
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">
 
-        <!-- ===================== -->
         <!-- Google Maps API Key -->
-        <!-- (Maps SDK for Android ONLY) -->
-        <!-- ===================== -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyDNoO9XpIl1XreMc9xfDCYJivnhpiaDbGw" />
 
-        <!-- ===================== -->
         <!-- Main Activity -->
-        <!-- ===================== -->
         <activity
             android:name="com.nursetracker.app.MainActivity"
             android:exported="true"
@@ -58,7 +57,7 @@
             android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode">
 
-            <!-- Flutter normal theme -->
+            <!-- Flutter theme -->
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme" />
@@ -75,8 +74,8 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
-            
-        <!-- Disable Impeller to fix black screen on some emulators -->
+
+        <!-- Disable Impeller -->
         <meta-data
             android:name="io.flutter.embedding.android.Renderer"
             android:value="skia" />

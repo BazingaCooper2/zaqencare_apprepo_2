@@ -199,7 +199,7 @@ class _IncidentReportFormWidgetState extends State<IncidentReportFormWidget> {
       print("SESSION USER ID: ${supabase.auth.currentUser?.id}");
       print("EMP ID BEING SENT: ${SessionManager.empId}");
 
-      String _val(TextEditingController c) {
+      String val(TextEditingController c) {
         final text = c.text.trim();
         return text.isEmpty ? 'N/A' : text;
       }
@@ -209,38 +209,38 @@ class _IncidentReportFormWidgetState extends State<IncidentReportFormWidget> {
 
       final data = {
         'emp_id': SessionManager.empId,
-        'job_title': _val(_jobTitleController),
-        'work_location': _val(_locationController),
-        'supervisor_name': _val(_supervisorReportedToController),
+        'job_title': val(_jobTitleController),
+        'work_location': val(_locationController),
+        'supervisor_name': val(_supervisorReportedToController),
         'incident_date': _incidentDate != null ? DateFormat('yyyy-MM-dd').format(_incidentDate!) : null,
         'incident_time': _incidentTime != null ? '${_incidentTime!.hour.toString().padLeft(2, '0')}:${_incidentTime!.minute.toString().padLeft(2, '0')}:00' : null,
-        'incident_location': _val(_locationController),
-        'who_reported': _val(_whoReportedController),
-        'incident_description': _val(_incidentDescriptionController),
-        'sequence_of_events': _val(_sequenceController),
-        'client_condition': _val(_clientConditionController),
+        'incident_location': val(_locationController),
+        'who_reported': val(_whoReportedController),
+        'incident_description': val(_incidentDescriptionController),
+        'sequence_of_events': val(_sequenceController),
+        'client_condition': val(_clientConditionController),
         'pain_expressed': _painExpressed,
         'medical_attention_required': _medicalAttentionRequired,
         'environmental_hazards': _environmentalHazards,
-        'immediate_actions': _val(_immediateActionsController),
-        'who_was_informed': _val(_whoInformedController),
+        'immediate_actions': val(_immediateActionsController),
+        'who_was_informed': val(_whoInformedController),
         'reporter_name': reporterName,
         'telephone': int.tryParse(_telephoneController.text.trim()),
-        'email': _val(_emailController),
-        'supervisor_notified': _val(_supervisorReportedToController),
+        'email': val(_emailController),
+        'supervisor_notified': val(_supervisorReportedToController),
         'date_reported': _dateReported != null ? DateFormat('yyyy-MM-dd').format(_dateReported!) : DateFormat('yyyy-MM-dd').format(DateTime.now()),
         'time_reported': _timeReported != null 
           ? '${_timeReported!.hour.toString().padLeft(2, '0')}:${_timeReported!.minute.toString().padLeft(2, '0')}:00' 
           : DateFormat('HH:mm:ss').format(DateTime.now()),
-        'workers': _val(_workersController),
-        'clients': _val(_clientsController),
-        'others': _val(_othersController),
-        'withness_name': _val(_witnessNameController),
-        'witness_job_title': _val(_witnessTitleController),
-        'witness_contact': _val(_witnessContactController),
-        'witness_statement': _val(_whatStatedController),
-        'personal_observation': _val(_personalObservationController),
-        'injuries': _val(_injuryDetailsController),
+        'workers': val(_workersController),
+        'clients': val(_clientsController),
+        'others': val(_othersController),
+        'withness_name': val(_witnessNameController),
+        'witness_job_title': val(_witnessTitleController),
+        'witness_contact': val(_witnessContactController),
+        'witness_statement': val(_whatStatedController),
+        'personal_observation': val(_personalObservationController),
+        'injuries': val(_injuryDetailsController),
         'reporter_signature': _uploadedSignatureUrl != null ? {'url': _uploadedSignatureUrl} : null,
         'status': 'Submitted',
         'created_at': DateTime.now().toIso8601String(),
@@ -256,7 +256,7 @@ class _IncidentReportFormWidgetState extends State<IncidentReportFormWidget> {
       final emailSent = await EmailService.sendIncidentReportEmail(
         incidentDate: _incidentDate != null ? DateFormat('yyyy-MM-dd').format(_incidentDate!) : 'N/A',
         incidentTime: _incidentTime != null ? '${_incidentTime!.hour.toString().padLeft(2, '0')}:${_incidentTime!.minute.toString().padLeft(2, '0')}' : 'N/A',
-        location: _val(_locationController),
+        location: val(_locationController),
         description: _incidentDescriptionController.text
             .trim(), // Send cleaner main description to email, extras in separate args
         sequenceOfEvents: _sequenceController.text.trim(),

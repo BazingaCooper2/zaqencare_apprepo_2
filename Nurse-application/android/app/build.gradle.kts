@@ -16,8 +16,8 @@ android {
     applicationId = "com.nursetracker.app"
     minSdk = flutter.minSdkVersion
     targetSdk = 36
-    versionCode = 7
-    versionName = "1.7"
+    versionCode = 13
+    versionName = "1.9.4"
 }
 
 
@@ -51,8 +51,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            isMinifyEnabled = false
+            isShrinkResources = false
             signingConfig = signingConfigs.getByName("release")
 
             proguardFiles(
