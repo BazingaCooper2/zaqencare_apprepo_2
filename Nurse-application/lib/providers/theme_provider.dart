@@ -11,7 +11,7 @@ class ThemeProvider with ChangeNotifier {
   }
 
   // Modern Medical/App color palette
-  static const Color _seedColor = Color(0xFF00695C); // Deep Teal
+  static const Color _seedColor = Color(0xFF1A73E8); // Brand Blue
   static const double _borderRadius = 16.0;
 
   ThemeData get lightTheme => ThemeData(

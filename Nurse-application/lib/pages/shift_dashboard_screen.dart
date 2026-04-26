@@ -9,9 +9,7 @@ import 'task_list_screen.dart';
 import 'client_details_screen.dart';
 
 /// ✅ ShiftDashboardScreen
-/// Displays today's shifts for the logged-in employee.
-/// Individual shifts → full card with Clock In/Out, Tasks, Details.
-/// Block Parent shifts → only "View Slots".
+/// Displays today's schedule for the logged-in employee.
 class ShiftDashboardScreen extends StatefulWidget {
   final Employee employee;
 
@@ -82,10 +80,19 @@ class _ShiftDashboardScreenState extends State<ShiftDashboardScreen> {
     final today = DateFormat('EEEE, MMM d').format(DateTime.now());
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F1729),
+      backgroundColor: const Color(0xFFE8F0EE), // Premium light mint background
       appBar: AppBar(
-        backgroundColor: const Color(0xFF162040),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF1A1A2E), Color(0xFF16213E)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
         elevation: 0,
+        centerTitle: false,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -99,16 +106,19 @@ class _ShiftDashboardScreenState extends State<ShiftDashboardScreen> {
             ),
             Text(
               today,
-              style: const TextStyle(color: Color(0xFF8892B0), fontSize: 13),
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.6), 
+                fontSize: 12,
+              ),
             ),
           ],
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white),
+            icon: const Icon(Icons.refresh_rounded, color: Colors.white),
             onPressed: _loadShifts,
-            tooltip: 'Refresh',
           ),
+          const SizedBox(width: 8),
         ],
       ),
       body: _buildBody(),
@@ -117,20 +127,24 @@ class _ShiftDashboardScreenState extends State<ShiftDashboardScreen> {
 
   Widget _buildBody() {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator(color: Color(0xFF64FFDA)));
+      return const Center(child: CircularProgressIndicator(color: Color(0xFF1A1A2E)));
     }
 
     if (_error != null) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, color: Colors.red, size: 48),
-            const SizedBox(height: 12),
-            Text(_error!, style: const TextStyle(color: Colors.red)),
-            const SizedBox(height: 16),
-            ElevatedButton(onPressed: _loadShifts, child: const Text('Retry')),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline_rounded, color: Colors.orange, size: 48),
+              const SizedBox(height: 16),
+              const Text('Failed to load schedule', style: TextStyle(fontWeight: FontWeight.bold)),
+              Text(_error!, textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade600)),
+              const SizedBox(height: 24),
+              ElevatedButton(onPressed: _loadShifts, child: const Text('Retry')),
+            ],
+          ),
         ),
       );
     }
@@ -140,12 +154,9 @@ class _ShiftDashboardScreenState extends State<ShiftDashboardScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.calendar_today, color: Colors.white.withValues(alpha: 0.3), size: 64),
+            Icon(Icons.event_available_rounded, color: Colors.grey.shade300, size: 64),
             const SizedBox(height: 16),
-            Text(
-              'No shifts today',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 18),
-            ),
+            const Text('No shifts for today', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           ],
         ),
       );
@@ -153,18 +164,14 @@ class _ShiftDashboardScreenState extends State<ShiftDashboardScreen> {
 
     return RefreshIndicator(
       onRefresh: _loadShifts,
-      color: const Color(0xFF64FFDA),
+      color: const Color(0xFF1A1A2E),
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         children: [
+          // Block Assignments Section
           if (_blocks.any((b) => _blockChildren.containsKey(b.shiftId))) ...[
-            const Padding(
-              padding: EdgeInsets.only(left: 4, bottom: 12),
-              child: Text(
-                'Block Assignments',
-                style: TextStyle(color: Color(0xFF64FFDA), fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-            ),
+            _buildSectionHeader('BLOCK ASSIGNMENTS', Colors.purple),
+            const SizedBox(height: 16),
             ..._blocks
                 .where((b) => _blockChildren.containsKey(b.shiftId))
                 .map((block) => _BlockParentCard(
@@ -182,25 +189,17 @@ class _ShiftDashboardScreenState extends State<ShiftDashboardScreen> {
                     _loadShifts();
                   },
                 )),
-            const SizedBox(height: 24),
+            const SizedBox(height: 32),
           ],
+
+          // Standalone Visits Section
           if (_standalone.isNotEmpty) ...[
-            const Padding(
-              padding: EdgeInsets.only(left: 4, bottom: 12),
-              child: Text(
-                'Standalone Visits',
-                style: TextStyle(color: Color(0xFF64FFDA), fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-            ),
+            _buildSectionHeader('STANDALONE VISITS', const Color(0xFF1A73E8)),
+            const SizedBox(height: 16),
             ..._standalone.map((shift) => IndividualShiftCard(
                   shift: shift,
                   employee: widget.employee,
                   isClockedIn: shift.isActive,
-                  isClockingIn: false,
-                  isClockingOut: false,
-                  // Dashboard is VIEW ONLY
-                  onClockIn: null,
-                  onClockOut: null,
                   onViewTasks: () async {
                     await Navigator.push(
                       context,
@@ -227,6 +226,31 @@ class _ShiftDashboardScreenState extends State<ShiftDashboardScreen> {
       ),
     );
   }
+
+  Widget _buildSectionHeader(String title, Color color) {
+    return Row(
+      children: [
+        Container(
+          width: 4,
+          height: 18,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          title,
+          style: const TextStyle(
+            color: Color(0xFF1A1A2E), 
+            fontSize: 13, 
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -245,104 +269,118 @@ class _BlockParentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 24),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF2D1B69), Color(0xFF1A1040)],
-        ),
-        border: Border.all(
-            color: const Color(0xFFBB86FC).withValues(alpha: 0.3)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                const Icon(Icons.grid_view_rounded,
-                    color: Color(0xFFBB86FC), size: 22),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    shift.department ?? 'Block Program',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
+            Container(height: 6, color: Colors.purple.shade400),
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const ShiftStatusBadge(label: 'BLOCK', color: Colors.purple),
+                      const Spacer(),
+                      Text(
+                        '#${shift.shiftId}',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade400),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Icon(Icons.grid_view_rounded, color: Colors.purple.shade400, size: 28),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              shift.department ?? 'Block Program',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF1A1A2E),
+                              ),
+                            ),
+                            Text('Assigned Schedule', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      _buildInfo(Icons.calendar_today_rounded, shift.date ?? '', 'Date'),
+                      const SizedBox(width: 32),
+                      _buildInfo(Icons.access_time_rounded, shift.formattedTimeRange, 'Time'),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1A1A2E),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        elevation: 0,
+                      ),
+                      icon: const Icon(Icons.visibility_outlined, size: 20),
+                      label: const Text('View Assigned Slots', style: TextStyle(fontWeight: FontWeight.bold)),
+                      onPressed: onViewSlots,
                     ),
                   ),
-                ),
-                const ShiftStatusBadge(
-                    label: 'BLOCK', color: Color(0xFFBB86FC)),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 16,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.calendar_today,
-                        color: Color(0xFF8892B0), size: 15),
-                    const SizedBox(width: 6),
-                    Text(
-                      shift.date ?? '',
-                      style: const TextStyle(
-                          color: Color(0xFF8892B0), fontSize: 13),
-                    ),
-                  ],
-                ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.access_time,
-                        color: Color(0xFF8892B0), size: 15),
-                    const SizedBox(width: 6),
-                    Text(
-                      shift.formattedTimeRange,
-                      style: const TextStyle(
-                          color: Color(0xFF8892B0), fontSize: 13),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFBB86FC),
-                  foregroundColor: Colors.black,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-                icon: const Icon(Icons.people_alt_outlined),
-                label: const Text(
-                  'View Slots',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                onPressed: onViewSlots,
+                ],
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildInfo(IconData icon, String text, String label) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 14, color: Colors.purple.shade400),
+            const SizedBox(width: 6),
+            Text(label, style: TextStyle(color: Colors.grey.shade500, fontSize: 11, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Padding(
+          padding: const EdgeInsets.only(left: 20),
+          child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1A1A2E))),
+        ),
+      ],
     );
   }
 }

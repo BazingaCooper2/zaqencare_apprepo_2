@@ -347,8 +347,8 @@ class CarePlan {
   final List<CarePlanTask> tasks;
 
   CarePlan.fromJson(Map<String, dynamic> json)
-      : carePlanId = json['care_plan_id'],
-        tasks = (json['care_plan_tasks'] as List? ?? [])
+      : carePlanId = (json['care_plan_id'] ?? json['id'] ?? 0) as int,
+        tasks = (json['care_plan_tasks'] as List? ?? json['tasks'] as List? ?? [])
             .map((e) => CarePlanTask.fromJson(e as Map<String, dynamic>))
             .toList();
 }
@@ -358,6 +358,6 @@ class CarePlanTask {
   final String taskName;
 
   CarePlanTask.fromJson(Map<String, dynamic> json)
-      : taskId = json['task_id'],
-        taskName = json['task_name'] ?? '';
+      : taskId = (json['task_id'] ?? json['id'] ?? 0) as int,
+        taskName = json['task_name'] ?? json['name'] ?? json['details'] ?? '';
 }

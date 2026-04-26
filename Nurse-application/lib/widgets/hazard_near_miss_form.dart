@@ -161,7 +161,8 @@ class _HazardNearMissFormState extends State<HazardNearMissForm> {
     setState(() => _isSubmitting = true);
 
     try {
-      if (SessionManager.empId == null) {
+      final empId = await SessionManager.getEmpId();
+      if (empId == null) {
         if (mounted) {
           context.showSnackBar('You must be logged in to submit a report.',
               isError: true);
@@ -182,7 +183,7 @@ class _HazardNearMissFormState extends State<HazardNearMissForm> {
       final reporterName = fullName.isEmpty ? 'N/A' : fullName;
 
       final data = {
-        'emp_id': SessionManager.empId,
+        'emp_id': empId,
         'reported_date': _reportedDate != null ? DateFormat('yyyy-MM-dd').format(_reportedDate!) : DateFormat('yyyy-MM-dd').format(DateTime.now()),
         'reported_time': _reportedTime != null 
           ? '${_reportedTime!.hour.toString().padLeft(2, '0')}:${_reportedTime!.minute.toString().padLeft(2, '0')}:00' 
@@ -299,43 +300,17 @@ class _HazardNearMissFormState extends State<HazardNearMissForm> {
           _buildSectionHeader('PART 1: REPORT COMPLETED BY'),
           const SizedBox(height: 16),
 
-          // Row 1: Name (Static implied) & Telephone
           _buildTextField(
             controller: _telephoneController,
             label: 'Telephone Number',
-            icon: Icons.phone,
+            icon: Icons.phone_rounded,
           ),
           const SizedBox(height: 16),
 
-          // Row 2: Location (This is likely "Primary Work Location" in Part 1)
-          // Using _locationController for now as main "Location"
-          // If "Location of Incident" is separate, we should maybe add PrimaryWorkLocation.
-          // But usually incident location is what matters.
-          // Let's assume _locationController IS Part 1 Location for now to avoid confusion
-          // unless I added _primaryWorkLocationController.
-          // Wait, I did NOT add _primaryWorkLocationController in the class state above.
-          // I see _locationController commented "Incident Location".
-          // I will use it for "Location of Incident" in the form below.
-          // What about "Primary Work Location"?
-          // I'll add a new controller for "Primary Work Location" to be safe.
-          // Wait, I didn't add it in the state above.
-          // I'll reuse _locationController for "Primary Work Location"
-          // AND add a new _incidentLocationController?
-          // No, usually they are the same or specific.
-          // I will just add "Supervisor" and use _locationController for "Incident Location".
-          // If the image has both "Primary Work Location" and "Location of Incident", I should have both.
-          // I will add a new text field for Primary Work Location using a temporary controller if I can, OR just skip it if not critical.
-          // "ensure that all those blanks... are there".
-          // I'll stick to what I defined. Adding more controllers now means modifying the Class State block again.
-          // I'll use `_locationController` for "Incident Location" (Part 1 bottom).
-          // I'll add a TextField for "Primary Work Location" that binds to `_locationController`?? No, that's bad.
-          // I'll just map "Primary Work Location" -> Not captured separately for now, or just add a field that is "optional" and not saved?
-          // I'll stick to the defined controllers.
-
           _buildTextField(
             controller: _supervisorController,
-            label: 'Supervisor/Designate reported incident to',
-            icon: Icons.person_outline,
+            label: 'Supervisor/Designate reported to',
+            icon: Icons.person_search_rounded,
           ),
           const SizedBox(height: 16),
 
@@ -367,179 +342,187 @@ class _HazardNearMissFormState extends State<HazardNearMissForm> {
           ),
           const SizedBox(height: 16),
 
-          // Location of Incident
           _buildTextField(
             controller: _locationController,
-            label: 'Location of Incident / Primary Work Location',
-            validatorMsg: 'Please enter location',
-            icon: Icons.place,
+            label: 'Location of Incident',
+            icon: Icons.place_rounded,
           ),
           const SizedBox(height: 16),
 
-          // Reason for delay
           _buildTextField(
             controller: _reasonForDelayController,
-            label: 'If not reported immediately, give reason',
+            label: 'Reason for delay (if any)',
             required: false,
           ),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
           _buildSectionHeader('PART 2: INDIVIDUALS INVOLVED'),
           const SizedBox(height: 16),
           _buildTextField(
               controller: _workersController,
-              label: 'Workers',
-              required: false),
-          const SizedBox(height: 12),
+              label: 'Workers Involved',
+              required: false,
+              icon: Icons.group_rounded),
+          const SizedBox(height: 16),
           _buildTextField(
               controller: _clientsController,
-              label: 'Clients',
-              required: false),
-          const SizedBox(height: 12),
+              label: 'Clients Involved',
+              required: false,
+              icon: Icons.person_outline_rounded),
+          const SizedBox(height: 16),
           _buildTextField(
               controller: _othersController,
-              label: 'Other (Isolate, verify)',
-              required: false),
+              label: 'Other Individuals',
+              required: false,
+              icon: Icons.info_outline_rounded),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
           _buildSectionHeader('PART 3: HAZARD RATING'),
           const SizedBox(height: 16),
           _buildDropdown(
-            label: 'Choose one',
+            label: 'Select Hazard Rating',
             value: _hazardRating,
             options: _hazardRatingOptions,
             onChanged: (value) => setState(() => _hazardRating = value),
             formatter: (value) => value.replaceAll('_', ' '),
           ),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
           _buildSectionHeader('PART 4: TYPE OF HAZARD'),
           const SizedBox(height: 16),
           _buildHazardTypesSelector(),
 
-          const SizedBox(height: 24),
-          _buildSectionHeader('PART 5: STATEMENT OF HAZARD/NEAR MISS'),
-          const SizedBox(height: 4),
-          const Text(
-              'Include immediate action taken. Do not write personal opinions.',
-              style:
-                  TextStyle(fontStyle: FontStyle.italic, color: Colors.grey)),
-          const SizedBox(height: 16),
-
+          const SizedBox(height: 32),
+          _buildSectionHeader('PART 5: STATEMENT OF HAZARD'),
+          const SizedBox(height: 8),
           _buildTextField(
             controller: _hazardStatementController,
             label: 'Statement of Hazard/Incident',
-            validatorMsg: 'Please describe the hazard',
             maxLines: 4,
           ),
           const SizedBox(height: 16),
           _buildTextField(
             controller: _immediateActionController,
             label: 'Immediate Action Taken',
-            validatorMsg: 'Describe immediate actions',
             maxLines: 3,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
 
           // Signature
-          const Text('Signature:',
-              style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
+          const Text('Reporter Signature',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1A1A2E))),
+          const SizedBox(height: 12),
           Container(
             decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade400),
-              borderRadius: BorderRadius.circular(8),
+              color: const Color(0xFFF8F9FB),
+              border: Border.all(color: Colors.grey.shade200),
+              borderRadius: BorderRadius.circular(16),
             ),
-            child: Column(
-              children: [
-                Signature(
-                  controller: _signatureController,
-                  height: 120,
-                  backgroundColor: Colors.grey.shade100,
-                ),
-                Container(
-                  color: Colors.grey.shade200,
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      TextButton.icon(
-                        icon: const Icon(Icons.clear, size: 20),
-                        label: const Text('Clear'),
-                        onPressed: () => _signatureController.clear(),
-                      ),
-                      TextButton.icon(
-                        icon: const Icon(Icons.check, size: 20),
-                        label: const Text('Save Signature'),
-                        onPressed: () async {
-                          final signature =
-                              await _signatureController.toPngBytes();
-                          if (signature != null) {
-                            setState(() => _signatureImage = signature);
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content: Text('Signature captured!'),
-                                    duration: Duration(seconds: 1)),
-                              );
-                            }
-                          }
-                        },
-                      ),
-                    ],
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Column(
+                children: [
+                  Signature(
+                    controller: _signatureController,
+                    height: 150,
+                    backgroundColor: Colors.white,
                   ),
-                ),
-              ],
+                  Container(
+                    color: Colors.grey.shade50,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        TextButton.icon(
+                          icon: const Icon(Icons.clear, size: 20, color: Colors.red),
+                          label: const Text('Clear', style: TextStyle(color: Colors.red)),
+                          onPressed: () => _signatureController.clear(),
+                        ),
+                        TextButton.icon(
+                          icon: const Icon(Icons.check_circle_outline, size: 20, color: Color(0xFF1A73E8)),
+                          label: const Text('Save Signature', style: TextStyle(color: Color(0xFF1A73E8))),
+                          onPressed: () async {
+                            final signature = await _signatureController.toPngBytes();
+                            if (signature != null) {
+                              setState(() => _signatureImage = signature);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Signature captured!')),
+                                );
+                              }
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           if (_signatureImage != null) ...[
-            const SizedBox(height: 8),
-            const Text('Signature Saved ✅',
-                style: TextStyle(
-                    color: Colors.green, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            const Row(
+              children: [
+                Icon(Icons.check_circle, color: Color(0xFF4CAF50), size: 16),
+                SizedBox(width: 8),
+                Text('Signature ready', style: TextStyle(color: Color(0xFF4CAF50), fontWeight: FontWeight.bold)),
+              ],
+            ),
           ],
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
           _buildSectionHeader('PART 6: WITNESS REMARKS'),
           const SizedBox(height: 16),
           _buildTextField(
             controller: _witnessNameController,
             label: 'Witness Name',
             required: false,
+            icon: Icons.person_pin_rounded,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           _buildTextField(
             controller: _witnessRemarksController,
-            label: 'Remarks',
+            label: 'Remarks / Statement',
             maxLines: 3,
             required: false,
           ),
 
-          const SizedBox(height: 24),
-          CheckboxListTile(
-            title: const Text('Hazard noted on Hazard Board'),
-            value: _documentedOnBoard,
-            onChanged: (value) =>
-                setState(() => _documentedOnBoard = value ?? false),
-            controlAffinity: ListTileControlAffinity.leading,
-            contentPadding: EdgeInsets.zero,
+          const SizedBox(height: 32),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade100),
+            ),
+            child: CheckboxListTile(
+              title: const Text('Documented on Hazard Board', 
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+              value: _documentedOnBoard,
+              onChanged: (value) => setState(() => _documentedOnBoard = value ?? false),
+              controlAffinity: ListTileControlAffinity.leading,
+              contentPadding: EdgeInsets.zero,
+              activeColor: const Color(0xFF1A73E8),
+            ),
           ),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 48),
           SizedBox(
             width: double.infinity,
+            height: 56,
             child: ElevatedButton(
               onPressed: _isSubmitting ? null : _submitForm,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue.shade700,
+                backgroundColor: const Color(0xFF1A73E8),
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                elevation: 4,
+                shadowColor: Colors.black.withOpacity(0.2),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               ),
               child: _isSubmitting
                   ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text('Submit Report', style: TextStyle(fontSize: 16)),
+                  : const Text('Submit Report', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             ),
           ),
         ],
@@ -550,14 +533,19 @@ class _HazardNearMissFormState extends State<HazardNearMissForm> {
   Widget _buildSectionHeader(String title) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-      color: Colors.grey.shade700,
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F4FF),
+        border: const Border(left: BorderSide(color: Color(0xFF1A73E8), width: 4)),
+        borderRadius: BorderRadius.circular(4),
+      ),
       child: Text(
         title,
         style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.bold,
-          fontSize: 14,
+          color: Color(0xFF1A73E8),
+          fontWeight: FontWeight.w900,
+          fontSize: 13,
+          letterSpacing: 0.5,
         ),
       ),
     );
@@ -568,7 +556,7 @@ class _HazardNearMissFormState extends State<HazardNearMissForm> {
     final valDate = isReported ? _reportedDate : _incidentDate;
     final valTime = isReported ? _reportedTime : _incidentTime;
 
-    String text = 'Select';
+    String text = 'Tap to select';
     if (isDate) {
       if (valDate != null) text = DateFormat('yyyy-MM-dd').format(valDate);
     } else {
@@ -578,24 +566,28 @@ class _HazardNearMissFormState extends State<HazardNearMissForm> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-        const SizedBox(height: 4),
+        Text(label, style: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.bold, fontSize: 13)),
+        const SizedBox(height: 8),
         InkWell(
           onTap: () => isDate
               ? _selectDate(context, isReported)
               : _selectTime(context, isReported),
-          child: InputDecorator(
-            decoration: InputDecoration(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              border:
-                  OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-              suffixIcon: Icon(
-                  isDate ? Icons.calendar_today : Icons.access_time,
-                  size: 20),
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8F9FB),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade200),
             ),
-            child: Text(text),
+            child: Row(
+              children: [
+                Icon(isDate ? Icons.calendar_today_rounded : Icons.access_time_rounded,
+                  size: 18, color: const Color(0xFF1A1A2E)),
+                const SizedBox(width: 12),
+                Expanded(child: Text(text, style: const TextStyle(color: Color(0xFF1A1A2E), fontWeight: FontWeight.w500))),
+              ],
+            ),
           ),
         ),
       ],
@@ -605,22 +597,29 @@ class _HazardNearMissFormState extends State<HazardNearMissForm> {
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,
-    String? validatorMsg,
     int maxLines = 1,
     bool required = true,
     IconData? icon,
   }) {
-    return TextFormField(
-      controller: controller,
-      maxLines: maxLines,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: icon != null ? Icon(icon, size: 22) : null,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      ),
-      validator: null, // Removed validation requirement
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.bold, fontSize: 13)),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: controller,
+          maxLines: maxLines,
+          decoration: InputDecoration(
+            prefixIcon: icon != null ? Icon(icon, size: 20, color: const Color(0xFF1A1A2E)) : null,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF1A73E8), width: 1.5)),
+            filled: true,
+            fillColor: const Color(0xFFF8F9FB),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          ),
+        ),
+      ],
     );
   }
 

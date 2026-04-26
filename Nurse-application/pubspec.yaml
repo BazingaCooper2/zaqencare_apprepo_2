@@ -3,7 +3,7 @@ description: ZaqenCare - Hospital nurse tracking application with GPS and schedu
 
 publish_to: 'none'
 
-version: 1.9.3+10  # ← UPDATED
+version: 2.0.0+20  # ← UPDATED
 
 environment:
   sdk: '>=3.0.0 <4.0.0'

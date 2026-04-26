@@ -118,12 +118,30 @@ class _EmployeeInfoPageState extends State<EmployeeInfoPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFE8F0EE),
       appBar: AppBar(
-        title: const Text('Employee Information'),
+        title: const Text('Employee Profile',
+            style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 20,
+                color: Colors.white,
+                letterSpacing: -0.3)),
+        centerTitle: true,
+        elevation: 0,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF1A73E8), Color(0xFF0D47A1)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
+        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           if (!_isEditing)
             IconButton(
-              icon: const Icon(Icons.edit),
+              icon: const Icon(Icons.edit_rounded),
               onPressed: () {
                 setState(() {
                   _isEditing = true;
@@ -133,7 +151,7 @@ class _EmployeeInfoPageState extends State<EmployeeInfoPage> {
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         child: _isEditing ? _buildEditForm() : _buildInfoView(),
       ),
     );
@@ -144,45 +162,171 @@ class _EmployeeInfoPageState extends State<EmployeeInfoPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Center(
-          child: CircleAvatar(
-            radius: 60,
-            backgroundColor:
-                Theme.of(context).primaryColor.withValues(alpha: 0.1),
-            child: Text(
-              '${_employee.firstName[0]}${_employee.lastName[0]}',
-              style: TextStyle(
-                fontSize: 36,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).primaryColor,
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                colors: [Color(0xFF1A73E8), Color(0xFF0D47A1)],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF1A73E8).withOpacity(0.2),
+                  blurRadius: 15,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: CircleAvatar(
+              radius: 56,
+              backgroundColor: Colors.white,
+              child: Text(
+                '${_employee.firstName[0]}${_employee.lastName[0]}',
+                style: const TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF1A73E8),
+                  letterSpacing: 1,
+                ),
               ),
             ),
           ),
         ),
-        const SizedBox(height: 24),
-        _InfoCard(
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 16.0),
+            child: Column(
+              children: [
+                Text(
+                  _employee.fullName,
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1A1A2E),
+                  ),
+                ),
+                Text(
+                  _employee.designation ?? 'Employee',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey.shade600,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 32),
+        _buildInfoCard(
           title: 'Personal Information',
+          icon: Icons.person_outline_rounded,
           children: [
-            _InfoRow(label: 'Employee ID', value: _employee.empId.toString()),
-            _InfoRow(label: 'Full Name', value: _employee.fullName),
-            _InfoRow(label: 'Email', value: _employee.email ?? 'Not provided'),
-            _InfoRow(label: 'Phone', value: _employee.phone ?? 'Not provided'),
+            _buildInfoRow(label: 'Employee ID', value: _employee.empId.toString(), icon: Icons.badge_outlined),
+            _buildInfoRow(label: 'Email', value: _employee.email ?? 'Not provided', icon: Icons.email_outlined),
+            _buildInfoRow(label: 'Phone', value: _employee.phone ?? 'Not provided', icon: Icons.phone_outlined),
           ],
         ),
         const SizedBox(height: 16),
-        _InfoCard(
+        _buildInfoCard(
           title: 'Work Information',
+          icon: Icons.work_outline_rounded,
           children: [
-            _InfoRow(
-                label: 'Designation',
-                value: _employee.designation ?? 'Not specified'),
-            _InfoRow(
-                label: 'Address', value: _employee.address ?? 'Not specified'),
-            _InfoRow(label: 'Status', value: _employee.status ?? 'Unknown'),
-            _InfoRow(
-                label: 'Skills', value: _employee.skills ?? 'Not specified'),
+            _buildInfoRow(
+                label: 'Status', value: _employee.status ?? 'Unknown', icon: Icons.info_outline_rounded),
+            _buildInfoRow(
+                label: 'Skills', value: _employee.skills ?? 'Not specified', icon: Icons.star_outline_rounded),
+            _buildInfoRow(
+                label: 'Address', value: _employee.address ?? 'Not specified', icon: Icons.map_outlined),
           ],
         ),
       ],
+    );
+  }
+
+  Widget _buildInfoCard({required String title, required IconData icon, required List<Widget> children}) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+            child: Row(
+              children: [
+                Icon(icon, color: const Color(0xFF1A73E8), size: 20),
+                const SizedBox(width: 10),
+                Text(
+                  title.toUpperCase(),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF1A73E8),
+                    letterSpacing: 0.8,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              children: children,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow({required String label, required String value, IconData? icon}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 18, color: Colors.grey.shade400),
+            const SizedBox(width: 12),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey.shade500,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1A1A2E),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -192,51 +336,33 @@ class _EmployeeInfoPageState extends State<EmployeeInfoPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TextFormField(
+          _buildEditField(
             controller: _firstNameController,
-            decoration: const InputDecoration(
-              labelText: 'First Name',
-              border: OutlineInputBorder(),
-            ),
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Please enter your first name';
-              }
-              return null;
-            },
+            label: 'First Name',
+            icon: Icons.person_outline_rounded,
+            validator: (value) => (value == null || value.isEmpty) ? 'Please enter first name' : null,
           ),
           const SizedBox(height: 16),
-          TextFormField(
+          _buildEditField(
             controller: _lastNameController,
-            decoration: const InputDecoration(
-              labelText: 'Last Name',
-              border: OutlineInputBorder(),
-            ),
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Please enter your last name';
-              }
-              return null;
-            },
+            label: 'Last Name',
+            icon: Icons.person_outline_rounded,
+            validator: (value) => (value == null || value.isEmpty) ? 'Please enter last name' : null,
           ),
           const SizedBox(height: 16),
-          TextFormField(
+          _buildEditField(
             controller: _phoneController,
-            decoration: const InputDecoration(
-              labelText: 'Phone Number',
-              border: OutlineInputBorder(),
-            ),
+            label: 'Phone Number',
+            icon: Icons.phone_rounded,
             keyboardType: TextInputType.phone,
           ),
           const SizedBox(height: 16),
-          TextFormField(
+          _buildEditField(
             controller: _departmentController,
-            decoration: const InputDecoration(
-              labelText: 'Designation',
-              border: OutlineInputBorder(),
-            ),
+            label: 'Designation',
+            icon: Icons.badge_outlined,
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
           Row(
             children: [
               Expanded(
@@ -246,7 +372,6 @@ class _EmployeeInfoPageState extends State<EmployeeInfoPage> {
                       : () {
                           setState(() {
                             _isEditing = false;
-                            // Reset controllers
                             _firstNameController.text = _employee.firstName;
                             _lastNameController.text = _employee.lastName;
                             _phoneController.text = _employee.phone ?? '';
@@ -254,16 +379,28 @@ class _EmployeeInfoPageState extends State<EmployeeInfoPage> {
                                 _employee.designation ?? '';
                           });
                         },
-                  child: const Text('Cancel'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    side: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E))),
                 ),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: ElevatedButton(
                   onPressed: _isLoading ? null : _updateEmployee,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1A73E8),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
                   child: _isLoading
-                      ? const CircularProgressIndicator()
-                      : const Text('Save Changes'),
+                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Text('Save Changes', style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ),
             ],
@@ -272,74 +409,34 @@ class _EmployeeInfoPageState extends State<EmployeeInfoPage> {
       ),
     );
   }
-}
 
-class _InfoCard extends StatelessWidget {
-  final String title;
-  final List<Widget> children;
-
-  const _InfoCard({
-    required this.title,
-    required this.children,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-            const SizedBox(height: 16),
-            ...children,
-          ],
+  Widget _buildEditField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    TextInputType? keyboardType,
+    String? Function(String?)? validator,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.bold, fontSize: 13)),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: controller,
+          keyboardType: keyboardType,
+          validator: validator,
+          decoration: InputDecoration(
+            prefixIcon: Icon(icon, size: 20, color: const Color(0xFF1A1A2E)),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF1A73E8), width: 1.5)),
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          ),
         ),
-      ),
-    );
-  }
-}
-
-class _InfoRow extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _InfoRow({
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w500,
-                    color: Colors.grey[600],
-                  ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ),
-        ],
-      ),
+      ],
     );
   }
 }

@@ -7,6 +7,25 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:633905181889:android:ebc23b10ab08ea69609040",
+        "android_client_info": {
+          "package_name": "ca.zaqencare.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBHaxvUTu8qlPJDbHfOArBWVLz2DYcIsHk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:633905181889:android:f855f85b0dc6db6e609040",
         "android_client_info": {
           "package_name": "com.nursetracker.app"

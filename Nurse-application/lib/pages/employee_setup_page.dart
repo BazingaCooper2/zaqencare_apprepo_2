@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../main.dart';
 import 'dashboard_page.dart';
 import '../constants/tables.dart';
+import '../services/session.dart';
 
 class EmployeeSetupPage extends StatefulWidget {
   const EmployeeSetupPage({super.key});
@@ -38,17 +39,18 @@ class _EmployeeSetupPageState extends State<EmployeeSetupPage> {
         _isLoading = true;
       });
 
-      final user = supabase.auth.currentUser;
-      if (user == null) throw Exception('No authenticated user');
+      final empData = await SessionManager.getEmployeeData();
+      final empId = await SessionManager.getEmpId();
+      
+      if (empId == null) throw Exception('No session found');
 
-      await supabase.from(Tables.employee).insert({
+      await supabase.from(Tables.employee).update({
         'first_name': _firstNameController.text.trim(),
         'last_name': _lastNameController.text.trim(),
-        'email': user.email,
         'phone': _phoneController.text.trim(),
         'designation': _selectedPosition,
-        'password': 'defaultpassword', // TODO: Add password field to form
-      });
+        // Password is not updated here for security
+      }).eq('emp_id', empId);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

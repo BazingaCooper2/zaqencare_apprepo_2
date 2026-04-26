@@ -9,15 +9,15 @@ plugins {
 }
 
 android {
-    namespace = "com.nursetracker.app"
+    namespace = "ca.zaqencare.app"
     compileSdk = 36
 
     defaultConfig {
-    applicationId = "com.nursetracker.app"
+    applicationId = "ca.zaqencare.app"
     minSdk = flutter.minSdkVersion
     targetSdk = 36
-    versionCode = 13
-    versionName = "1.9.4"
+    versionCode = 20
+    versionName = "2.0.0"
 }
 
 

@@ -76,7 +76,7 @@ class _ShiftPageState extends State<ShiftPage> {
         debugPrint('⚠️ Error fetching active shift RPC in ShiftPage: $e');
       }
 
-      // 2. Fetch All Relevant Shifts (Core Logic: All shifts assigned to employee, handle any mode)
+      // 1. Fetch All Relevant Shifts (Simple fetch for better compatibility)
       final response = await supabase
           .from('shift')
           .select('*')
@@ -87,9 +87,10 @@ class _ShiftPageState extends State<ShiftPage> {
 
       debugPrint('📥 Raw fetched rows = ${response.length}');
 
-      final List<Map<String, dynamic>> rawShifts = List<Map<String, dynamic>>.from(response);
+      final List<Map<String, dynamic>> rawShifts =
+          List<Map<String, dynamic>>.from(response);
 
-      // 3. Fetch Block Parents if any block_child shifts exist AND their parent is not already fetched
+      // 2. Fetch Block Parents if any block_child shifts exist
       final Set<int> parentIds = rawShifts
           .where((s) => s['parent_block_id'] != null)
           .map((s) => s['parent_block_id'] as int)
@@ -101,9 +102,8 @@ class _ShiftPageState extends State<ShiftPage> {
               .from('shift')
               .select('*')
               .inFilter('shift_id', parentIds.toList());
-          
+
           for (final p in parentResponse) {
-            // Check if already in list to avoid duplicates
             final parentId = p['shift_id'];
             if (!rawShifts.any((s) => s['shift_id'] == parentId)) {
               rawShifts.add(Map<String, dynamic>.from(p));
@@ -114,53 +114,42 @@ class _ShiftPageState extends State<ShiftPage> {
         }
       }
 
-      // 4. Collect unique client IDs safely
+      // 3. Collect unique client IDs safely
       final Set<int> clientIds = {};
       for (final shift in rawShifts) {
-        final cidRaw = shift['client_id'];
+        final cidRaw = shift['client_id']?.toString();
         if (cidRaw != null) {
-          int? parsedCid;
-          if (cidRaw is int)
-            parsedCid = cidRaw;
-          else if (cidRaw is num)
-            parsedCid = cidRaw.toInt();
-          else if (cidRaw is String) parsedCid = int.tryParse(cidRaw);
-
-          if (parsedCid != null) {
-            clientIds.add(parsedCid);
-          }
+          final pc = int.tryParse(cidRaw) ?? double.tryParse(cidRaw)?.toInt();
+          if (pc != null) clientIds.add(pc);
         }
       }
 
-      // 5. Fetch and map clients from client_final
+      // 4. Fetch and map clients with nested care plans & tasks
       Map<int, Map<String, dynamic>> clientsMap = {};
       if (clientIds.isNotEmpty) {
         try {
           final clientResponse = await supabase
               .from('client_final')
-              .select()
+              .select('*, care_plans!care_plans_client_id_fkey(*, care_plan_tasks!care_plan_tasks_care_plan_id_fkey(*))')
               .inFilter('id', clientIds.toList());
 
           for (final c in clientResponse) {
-            final cid = (c['id'] as num).toInt();
-            clientsMap[cid] = Map<String, dynamic>.from(c);
+            final idRaw = c['id']?.toString();
+            final id = idRaw != null ? (int.tryParse(idRaw) ?? double.tryParse(idRaw)?.toInt()) : null;
+            if (id != null) {
+              clientsMap[id] = Map<String, dynamic>.from(c);
+            }
           }
         } catch (e) {
           debugPrint('⚠️ Error fetching client details: $e');
         }
       }
 
-      // 6. Attach clients and Parse shifts
+      // 5. Attach clients and Parse shifts
       final shifts = rawShifts.map((rawJson) {
-        final json =
-            Map<String, dynamic>.from(rawJson); // Clone to ensure mutability
-        final cidRaw = json['client_id'];
-        int? parsedCid;
-        if (cidRaw is int)
-          parsedCid = cidRaw;
-        else if (cidRaw is num)
-          parsedCid = cidRaw.toInt();
-        else if (cidRaw is String) parsedCid = int.tryParse(cidRaw);
+        final json = Map<String, dynamic>.from(rawJson);
+        final cidRaw = json['client_id']?.toString();
+        final parsedCid = cidRaw != null ? (int.tryParse(cidRaw) ?? double.tryParse(cidRaw)?.toInt()) : null;
 
         if (parsedCid != null && clientsMap.containsKey(parsedCid)) {
           json['client'] = clientsMap[parsedCid];
@@ -218,8 +207,10 @@ class _ShiftPageState extends State<ShiftPage> {
   static String _normalizeStatus(String? raw) {
     if (raw == null || raw.trim().isEmpty) return '';
     final s = raw.toLowerCase().trim().replaceAll(' ', '_');
-    if (s == 'clocked_out' || s == 'completed' || s == 'ended_early') return 'clocked_out';
-    if (s == 'clocked_in' || s == 'active' || s == 'in_progress') return 'clocked_in';
+    if (s == 'clocked_out' || s == 'completed' || s == 'ended_early')
+      return 'clocked_out';
+    if (s == 'clocked_in' || s == 'active' || s == 'in_progress')
+      return 'clocked_in';
     if (s == 'scheduled') return 'scheduled';
     if (s == 'offered') return 'offered';
     if (s == 'accepted') return 'accepted';
@@ -233,8 +224,10 @@ class _ShiftPageState extends State<ShiftPage> {
     final todayLocal = DateTime(now.year, now.month, now.day);
 
     // ── DEBUG tracing ─────────────────────────────────────────────────────────
-    debugPrint('════════════════════════════════════════════════════════════════');
-    debugPrint('🔍 APPLY FILTERS: date=$_selectedDateFilter | statuses=$_selectedStatuses');
+    debugPrint(
+        '════════════════════════════════════════════════════════════════');
+    debugPrint(
+        '🔍 APPLY FILTERS: date=$_selectedDateFilter | statuses=$_selectedStatuses');
     debugPrint('📅 Today Local: $todayLocal | allShifts=${_allShifts.length}');
 
     List<Shift> filtered;
@@ -244,7 +237,8 @@ class _ShiftPageState extends State<ShiftPage> {
       Shift? activeShift;
       if (_activeShiftId != null) {
         try {
-          activeShift = _allShifts.firstWhere((s) => s.shiftId == _activeShiftId);
+          activeShift =
+              _allShifts.firstWhere((s) => s.shiftId == _activeShiftId);
         } catch (_) {}
       }
 
@@ -260,7 +254,8 @@ class _ShiftPageState extends State<ShiftPage> {
         final status = _normalizeStatus(shift.shiftStatus);
 
         // Date check: Today or Future
-        final matchesDate = shiftDate.isAtSameMomentAs(todayLocal) || shiftDate.isAfter(todayLocal);
+        final matchesDate = shiftDate.isAtSameMomentAs(todayLocal) ||
+            shiftDate.isAfter(todayLocal);
 
         // Status check: Next Scheduled (scheduled, assigned)
         final matchesStatus = _selectedStatuses.isEmpty
@@ -277,7 +272,12 @@ class _ShiftPageState extends State<ShiftPage> {
           return (a.shiftStartTime ?? '').compareTo(b.shiftStartTime ?? '');
         });
 
-      filtered = [if (activeShift != null && (activeShift.isStandalone || activeShift.isBlock)) activeShift, ...remaining];
+      filtered = [
+        if (activeShift != null &&
+            (activeShift.isStandalone || activeShift.isBlock))
+          activeShift,
+        ...remaining
+      ];
     } else {
       // ALL OTHER TABS
       filtered = _allShifts.where((shift) {
@@ -295,11 +295,15 @@ class _ShiftPageState extends State<ShiftPage> {
           matchesDate = shiftDate.isAtSameMomentAs(todayLocal);
         } else if (_selectedDateFilter == 'Next Scheduled') {
           // Next Scheduled includes today and future
-          matchesDate = (shiftDate.isAtSameMomentAs(todayLocal) || shiftDate.isAfter(todayLocal)) && (status == 'scheduled' || status == 'assigned');
+          matchesDate = (shiftDate.isAtSameMomentAs(todayLocal) ||
+                  shiftDate.isAfter(todayLocal)) &&
+              (status == 'scheduled' || status == 'assigned');
         } else if (_selectedDateFilter == 'This Week') {
-          final startOfWeek = todayLocal.subtract(Duration(days: todayLocal.weekday - 1));
+          final startOfWeek =
+              todayLocal.subtract(Duration(days: todayLocal.weekday - 1));
           final endOfWeek = startOfWeek.add(const Duration(days: 6));
-          matchesDate = !shiftDate.isBefore(startOfWeek) && !shiftDate.isAfter(endOfWeek);
+          matchesDate =
+              !shiftDate.isBefore(startOfWeek) && !shiftDate.isAfter(endOfWeek);
         } else if (_selectedDateFilter == 'Completed') {
           // Completed tab filters strictly by status
           matchesDate = (status == 'clocked_out' || status == 'cancelled');
@@ -329,7 +333,8 @@ class _ShiftPageState extends State<ShiftPage> {
     // DEBUG print results
     debugPrint("✅ After filtering: ${filtered.length} shift(s)");
     for (var s in filtered) {
-      debugPrint("   → Showing shift #${s.shiftId} | ${s.date} | ${s.shiftStatus} | normalized=${_normalizeStatus(s.shiftStatus)}");
+      debugPrint(
+          "   → Showing shift #${s.shiftId} | ${s.date} | ${s.shiftStatus} | normalized=${_normalizeStatus(s.shiftStatus)}");
     }
 
     setState(() {
@@ -365,84 +370,83 @@ class _ShiftPageState extends State<ShiftPage> {
     final colorScheme = theme.colorScheme;
 
     return Scaffold(
+      backgroundColor: const Color(0xFFE8F0EE),
       appBar: AppBar(
-        title: const Text('My Schedule'),
+        title: const Text('My Schedule',
+            style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 20,
+                color: Colors.white,
+                letterSpacing: -0.3)),
+        centerTitle: true,
         elevation: 0,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF1A73E8), Color(0xFF0D47A1)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
+        iconTheme: const IconThemeData(color: Colors.white),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: RefreshIndicator(
         onRefresh: _loadShifts,
+        color: const Color(0xFF1A1A2E),
         child: _isLoading
-            ? const CustomLoadingScreen(
-                message: 'Loading shifts...',
-                isOverlay: true,
-              )
+            ? const Center(child: CircularProgressIndicator(color: Color(0xFF1A1A2E)))
             : Column(
                 children: [
-                  // DATE FILTER
+                  // DATE FILTERS
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: colorScheme.surface,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
+                    width: double.infinity,
+                    color: Colors.white,
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
                     child: SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: Row(
                         children: [
-                          _buildDateFilterChip('Next Scheduled', theme),
-                          const SizedBox(width: 8),
-                          _buildDateFilterChip('Today', theme),
-                          const SizedBox(width: 8),
-                          _buildDateFilterChip('This Week', theme),
-                          const SizedBox(width: 8),
-                          _buildDateFilterChip(
-                              'Completed', theme), // Added Completed Preset
-                          const SizedBox(width: 8),
-                          _buildDateFilterChip('All', theme),
+                          _buildDateFilterChip('Next Scheduled'),
+                          const SizedBox(width: 10),
+                          _buildDateFilterChip('Today'),
+                          const SizedBox(width: 10),
+                          _buildDateFilterChip('This Week'),
+                          const SizedBox(width: 10),
+                          _buildDateFilterChip('Completed'),
+                          const SizedBox(width: 10),
+                          _buildDateFilterChip('All'),
                         ],
                       ),
                     ),
                   ),
 
-                  // STATUS FILTER
+                  // STATUS FILTERS (Restored)
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerHighest
-                          .withValues(alpha: 0.3),
-                    ),
+                    width: double.infinity,
+                    color: Colors.white,
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
                     child: SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: Row(
                         children: [
-                          _buildStatusChip(
-                              'scheduled', 'Scheduled', Colors.orange),
+                          _buildStatusChip('scheduled', 'Scheduled', Colors.orange),
                           const SizedBox(width: 8),
-                          _buildStatusChip(
-                              'offered', 'Offered', Colors.blueGrey),
+                          _buildStatusChip('offered', 'Offered', Colors.blueGrey),
                           const SizedBox(width: 8),
-                          _buildStatusChip(
-                              'accepted', 'Accepted', Colors.teal),
+                          _buildStatusChip('accepted', 'Accepted', Colors.teal),
                           const SizedBox(width: 8),
-                          _buildStatusChip(
-                              'assigned', 'Assigned', Colors.indigo),
+                          _buildStatusChip('assigned', 'Assigned', Colors.indigo),
                           const SizedBox(width: 8),
-                          _buildStatusChip(
-                              'clocked_in', 'Clocked in', Colors.blue),
+                          _buildStatusChip('clocked_in', 'Clocked in', Colors.blue),
                           const SizedBox(width: 8),
-                          _buildStatusChip(
-                              'clocked_out', 'Clocked out', Colors.green),
+                          _buildStatusChip('clocked_out', 'Clocked out', Colors.green),
                           const SizedBox(width: 8),
-                          _buildStatusChip(
-                              'cancelled', 'Cancelled', Colors.red),
+                          _buildStatusChip('cancelled', 'Cancelled', Colors.red),
                         ],
                       ),
                     ),
@@ -455,55 +459,33 @@ class _ShiftPageState extends State<ShiftPage> {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.calendar_today_outlined,
-                                    size: 64,
-                                    color: colorScheme.onSurface
-                                        .withValues(alpha: 0.3)),
+                                Container(
+                                  padding: const EdgeInsets.all(24),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(Icons.calendar_today_rounded,
+                                      size: 48,
+                                      color: Colors.grey.shade300),
+                                ),
                                 const SizedBox(height: 16),
                                 Text(
-                                  'No live shift available',
-                                  style: theme.textTheme.bodyLarge?.copyWith(
-                                    color: colorScheme.onSurface
-                                        .withValues(alpha: 0.6),
+                                  'No shifts found',
+                                  style: TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey.shade600,
                                   ),
                                 ),
                               ],
                             ),
                           )
                         : ListView(
-                            padding: const EdgeInsets.all(16),
+                            padding: const EdgeInsets.all(24),
                             children: [
-                              if (_filteredShifts.any((s) => s.isStandalone || s.isBlockChild)) ...[
-                                Padding(
-                                  padding: const EdgeInsets.only(left: 4, bottom: 12),
-                                  child: Text(
-                                    'Individual Shifts',
-                                    style: theme.textTheme.titleMedium?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      color: colorScheme.primary,
-                                    ),
-                                  ),
-                                ),
-                                ..._filteredShifts
-                                    .where((s) => s.isStandalone || s.isBlockChild)
-                                    .map((s) => _buildShiftCard(s)),
-                                const SizedBox(height: 24),
-                              ],
-                              if (_filteredShifts.any((s) => s.isBlock)) ...[
-                                Padding(
-                                  padding: const EdgeInsets.only(left: 4, bottom: 12),
-                                  child: Text(
-                                    'Block Assignments',
-                                    style: theme.textTheme.titleMedium?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      color: colorScheme.primary,
-                                    ),
-                                  ),
-                                ),
-                                ..._filteredShifts
-                                    .where((s) => s.isBlock)
-                                    .map((s) => _buildShiftCard(s)),
-                              ],
+                              ..._filteredShifts.map((s) => _buildShiftCard(s)),
+                              const SizedBox(height: 40),
                             ],
                           ),
                   ),
@@ -513,27 +495,22 @@ class _ShiftPageState extends State<ShiftPage> {
     );
   }
 
-  Widget _buildDateFilterChip(String label, ThemeData theme) {
+  Widget _buildDateFilterChip(String label) {
     final isSelected = _selectedDateFilter == label;
-    final colorScheme = theme.colorScheme;
-
     return GestureDetector(
       onTap: () => _onDateFilterChanged(label),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected
-              ? colorScheme.primary
-              : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-          borderRadius: BorderRadius.circular(20),
+          color: isSelected ? const Color(0xFF003D33) : Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected
-                ? colorScheme.onPrimary
-                : colorScheme.onSurfaceVariant,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            color: isSelected ? Colors.white : Colors.grey.shade600,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
             fontSize: 14,
           ),
         ),
@@ -544,20 +521,28 @@ class _ShiftPageState extends State<ShiftPage> {
   Widget _buildStatusChip(String status, String label, Color color) {
     final normalized = status.toLowerCase().replaceAll(' ', '_');
     final isSelected = _selectedStatuses.contains(normalized);
-
-    return FilterChip(
-      label: Text(label),
-      selected: isSelected,
-      onSelected: (_) => _onStatusFilterToggled(status),
-      selectedColor: color.withValues(alpha: 0.2),
-      checkmarkColor: color,
-      labelStyle: TextStyle(
-        color: isSelected ? color : Colors.grey[700],
-        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-      ),
-      side: BorderSide(
-        color: isSelected ? color : Colors.grey[300]!,
-        width: isSelected ? 2 : 1,
+    
+    return GestureDetector(
+      onTap: () => _onStatusFilterToggled(status),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? color : color.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected ? color : color.withOpacity(0.2),
+            width: 1.2,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : color,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+            fontSize: 12,
+          ),
+        ),
       ),
     );
   }
@@ -581,152 +566,130 @@ class _ShiftPageState extends State<ShiftPage> {
   }
 
   Widget _buildBlockParentCard(Shift shift) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 20),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: Colors.grey.shade200),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE3F2FD),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(
-                    Icons.grid_view_rounded,
-                    color: Color(0xFF1976D2),
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        shift.department ?? 'Block Assignment',
-                        style: const TextStyle(
-                          color: Color(0xFF202124),
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Multiple Slots Assigned',
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    color: const Color(0xFFF3E5F5),
-                    border: Border.all(color: const Color(0xFFCE93D8)),
-                  ),
-                  child: const Text(
-                    'BLOCK',
-                    style: TextStyle(
-                      color: Color(0xFF7B1FA2),
-                      fontSize: 10,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.2,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8F9FA),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade200),
-              ),
-              child: Wrap(
-                spacing: 20,
-                runSpacing: 10,
-                crossAxisAlignment: WrapCrossAlignment.center,
+            Container(height: 6, color: Colors.purple.shade400),
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.calendar_today_rounded, color: Color(0xFF5F6368), size: 18),
-                      const SizedBox(width: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.purple.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'BLOCK',
+                          style: TextStyle(
+                            color: Colors.purple.shade700,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
                       Text(
-                        shift.clockFormattedDate,
-                        style: const TextStyle(color: Color(0xFF3C4043), fontSize: 14, fontWeight: FontWeight.w600),
+                        '#${shift.shiftId}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey.shade400,
+                        ),
                       ),
                     ],
                   ),
+                  const SizedBox(height: 16),
                   Row(
-                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.access_time_rounded, color: Color(0xFF5F6368), size: 18),
-                      const SizedBox(width: 10),
-                      Text(
-                        shift.formattedTimeRange,
-                        style: const TextStyle(color: Color(0xFF3C4043), fontSize: 14, fontWeight: FontWeight.w600),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Icon(Icons.grid_view_rounded,
+                          color: Colors.purple.shade400, size: 28),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              shift.department ?? 'Block Assignment',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF1A1A2E),
+                              ),
+                            ),
+                            Text(
+                              'Assigned Schedule',
+                              style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Flexible(child: _buildMiniInfo(Icons.calendar_today_rounded, shift.clockFormattedDate, 'Date')),
+                      const SizedBox(width: 16),
+                      Flexible(child: _buildMiniInfo(Icons.access_time_rounded, shift.formattedTimeRange, 'Time')),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1A1A2E),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      icon: const Icon(Icons.format_list_bulleted_rounded, size: 20),
+                      label: const Text(
+                        'View Assigned Slots',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      ),
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => BlockSlotsScreen(
+                              blockShift: shift,
+                              employee: widget.employee,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                   ),
                 ],
-              ),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => BlockSlotsScreen(
-                        blockShift: shift,
-                        employee: widget.employee,
-                      ),
-                    ),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE3F2FD),
-                  foregroundColor: const Color(0xFF1976D2),
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    side: const BorderSide(color: Color(0xFFBBDEFB)),
-                  ),
-                ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.format_list_bulleted_rounded, size: 20),
-                    SizedBox(width: 12),
-                    Text(
-                      'View Assigned Slots',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ],
-                ),
               ),
             ),
           ],
@@ -735,73 +698,126 @@ class _ShiftPageState extends State<ShiftPage> {
     );
   }
 
+  Widget _buildMiniInfo(IconData icon, String text, String label) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: Colors.purple.shade400),
+            const SizedBox(width: 6),
+            Text(label, style: TextStyle(color: Colors.grey.shade500, fontSize: 11, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Padding(
+          padding: const EdgeInsets.only(left: 20),
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              color: Color(0xFF1A1A2E),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   void _showShiftDetails(Shift shift, ThemeData theme) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: const Color(0xFFE8F0EE),
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.5,
-        minChildSize: 0.3,
+        initialChildSize: 0.6,
+        minChildSize: 0.4,
         maxChildSize: 0.9,
         expand: false,
         builder: (context, scrollController) => Container(
-          padding: const EdgeInsets.all(24),
-          child: ListView(
-            controller: scrollController,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          child: Column(
             children: [
-              // Handle Bar
+              // Drag Handle
               Center(
                 child: Container(
                   width: 40,
                   height: 4,
-                  margin: const EdgeInsets.only(bottom: 20),
                   decoration: BoxDecoration(
                     color: Colors.grey.shade300,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
               ),
+              const SizedBox(height: 24),
 
-              Text(
+              // Title
+              const Text(
                 'Shift Details',
-                style: theme.textTheme.headlineSmall?.copyWith(
+                style: TextStyle(
+                  fontSize: 24,
                   fontWeight: FontWeight.bold,
+                  color: Color(0xFF1A1A2E),
+                  letterSpacing: -0.5,
                 ),
-                textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 8),
-              Center(
-                  child: _buildStatusTag(
-                      shift.statusDisplayText, shift.statusColor)),
-              const SizedBox(height: 32),
+              const SizedBox(height: 12),
 
-              _buildDetailItem(theme, 'Client Name', shift.clientName ?? 'N/A'),
-              _buildDetailItem(
-                  theme, 'Location', shift.clientLocation ?? 'N/A'),
-              _buildDetailItem(
-                  theme, 'Service Type', shift.clientServiceType ?? 'N/A'),
-              _buildDetailItem(
-                  theme, 'Skills Required', shift.skills ?? 'None specified'),
+              // Status Badge
+              _buildStatusTag(shift.statusDisplayText, shift.statusColor),
+              const SizedBox(height: 40),
 
-              if (shift.shiftProgressNote != null &&
-                  shift.shiftProgressNote!.isNotEmpty)
-                _buildDetailItem(
-                    theme, 'Progress Note', shift.shiftProgressNote!),
+              // Scrollable Details
+              Expanded(
+                child: ListView(
+                  controller: scrollController,
+                  children: [
+                    _buildDetailItem('Client Name', shift.clientName ?? 'N/A'),
+                    const SizedBox(height: 24),
+                    _buildDetailItem('Phone Number', shift.client?.phoneMain ?? 'Not provided'),
+                    const SizedBox(height: 24),
+                    _buildDetailItem('Location', shift.clientLocation ?? 'N/A'),
+                    const SizedBox(height: 24),
+                    _buildDetailItem('Service Type', shift.clientServiceType ?? 'N/A'),
+                    const SizedBox(height: 24),
+                    _buildDetailItem('Skills Required', shift.skills ?? 'None specified'),
+                    if (shift.shiftProgressNote?.isNotEmpty ?? false) ...[
+                      const SizedBox(height: 24),
+                      _buildDetailItem('Progress Note', shift.shiftProgressNote!),
+                    ],
+                  ],
+                ),
+              ),
 
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+              // Close Button
+              Padding(
+                padding: const EdgeInsets.only(top: 12, bottom: 12),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1A73E8),
+                      foregroundColor: Colors.white,
+                      elevation: 4,
+                      shadowColor: Colors.black.withOpacity(0.2),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: const Text(
+                      'Close',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
                   ),
-                  child: const Text('Close'),
                 ),
               ),
             ],
@@ -811,55 +827,55 @@ class _ShiftPageState extends State<ShiftPage> {
     );
   }
 
-  Widget _buildDetailItem(ThemeData theme, String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: theme.colorScheme.onSurface.withOpacity(0.6),
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.5,
-            ),
+  Widget _buildDetailItem(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.grey.shade600,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
           ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: theme.textTheme.bodyLarge?.copyWith(
-              fontSize: 16,
-            ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Color(0xFF1A1A2E),
+            fontSize: 17,
+            fontWeight: FontWeight.bold,
           ),
-          const Divider(height: 24),
-        ],
-      ),
+        ),
+        const SizedBox(height: 10),
+        Divider(color: Colors.grey.shade300, thickness: 0.8),
+      ],
     );
   }
 
   Widget _buildStatusTag(String text, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       decoration: BoxDecoration(
         color: color.withOpacity(0.08),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withOpacity(0.5), width: 1.5),
+        border: Border.all(color: color.withOpacity(0.4), width: 1.2),
       ),
       child: Text(
-        text,
+        text.toUpperCase(),
         style: TextStyle(
           color: color,
-          fontWeight: FontWeight.w800,
-          fontSize: 13,
-          letterSpacing: 0.3,
+          fontWeight: FontWeight.w900,
+          fontSize: 12,
+          letterSpacing: 0.5,
         ),
       ),
     );
   }
 
-  Widget _buildInfoChip(String label, String value, Color bgColor, Color textColor) {
+  Widget _buildInfoChip(
+      String label, String value, Color bgColor, Color textColor) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16),
       decoration: BoxDecoration(

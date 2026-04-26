@@ -56,7 +56,7 @@ class _ReportsPageState extends State<ReportsPage> {
       List<double> dailyHours = [];
       List<String> days = [];
       Map<String, double> dayMap = {};
-      
+
       final now = DateTime.now();
       for (int i = 6; i >= 0; i--) {
         final date = now.subtract(Duration(days: i));
@@ -176,7 +176,8 @@ class _ReportsPageState extends State<ReportsPage> {
                         color: Colors.blue,
                         icon: Icons.assignment_turned_in,
                       ),
-                      const Expanded(child: SizedBox()), // Placeholder for balance
+                      const Expanded(
+                          child: SizedBox()), // Placeholder for balance
                     ],
                   ),
 

@@ -77,7 +77,7 @@ class Shift {
           ? DateTime.parse(json['clock_out'].toString())
           : null,
       date: json['date']?.toString() ?? 
-            (json['shift_start_time'] != null ? json['shift_start_time'].toString().split('T').first : null),
+            (json['shift_start_time']?.toString().split('T').first),
       shiftType: json['shift_type']?.toString(),
       client: () {
         final clientData = json['client'] ?? json['client_final'];

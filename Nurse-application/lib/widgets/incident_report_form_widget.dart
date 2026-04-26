@@ -176,7 +176,8 @@ class _IncidentReportFormWidgetState extends State<IncidentReportFormWidget> {
     setState(() => _isSubmitting = true);
 
     try {
-      if (SessionManager.empId == null) {
+      final empId = await SessionManager.getEmpId();
+      if (empId == null) {
         if (mounted) {
           context.showSnackBar('You must be logged in to submit a report.',
               isError: true);
@@ -197,7 +198,7 @@ class _IncidentReportFormWidgetState extends State<IncidentReportFormWidget> {
       print("CURRENT USER: ${supabase.auth.currentUser}");
       print("CURRENT SESSION: ${supabase.auth.currentSession}");
       print("SESSION USER ID: ${supabase.auth.currentUser?.id}");
-      print("EMP ID BEING SENT: ${SessionManager.empId}");
+      print("EMP ID BEING SENT: $empId");
 
       String val(TextEditingController c) {
         final text = c.text.trim();
@@ -208,7 +209,7 @@ class _IncidentReportFormWidgetState extends State<IncidentReportFormWidget> {
       final reporterName = fullName.isEmpty ? 'N/A' : fullName;
 
       final data = {
-        'emp_id': SessionManager.empId,
+        'emp_id': empId,
         'job_title': val(_jobTitleController),
         'work_location': val(_locationController),
         'supervisor_name': val(_supervisorReportedToController),
@@ -353,42 +354,58 @@ class _IncidentReportFormWidgetState extends State<IncidentReportFormWidget> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
-            color: Colors.red.shade50,
-            child: const Text(
-              'Please notify the Supervisor/Coordinator of the incident prior to the end of the shift',
-              style: TextStyle(
-                  color: Colors.red, fontWeight: FontWeight.bold, fontSize: 13),
-              textAlign: TextAlign.center,
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF1F1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFFFDADA)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.warning_amber_rounded, color: Color(0xFFD32F2F), size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: const Text(
+                    'Please notify the Supervisor/Coordinator prior to the end of the shift',
+                    style: TextStyle(
+                        color: Color(0xFFD32F2F), fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
 
           _buildSectionHeader('PART 1: REPORT COMPLETED BY'),
           const SizedBox(height: 16),
-          // Name is auto-filled usually, but skipped as per previous request to just ensure blanks are there.
-          _buildTextField(controller: _jobTitleController, label: 'Job Title'),
-          const SizedBox(height: 12),
+          _buildTextField(
+            controller: _jobTitleController, 
+            label: 'Job Title',
+            icon: Icons.badge_outlined,
+          ),
+          const SizedBox(height: 16),
           _buildTextField(
               controller: _telephoneController,
               label: 'Telephone #',
-              icon: Icons.phone),
-          const SizedBox(height: 12),
+              icon: Icons.phone_rounded),
+          const SizedBox(height: 16),
           _buildTextField(
               controller: _emailController,
-              label: 'Email',
-              icon: Icons.email,
+              label: 'Email Address',
+              icon: Icons.email_outlined,
               required: false),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           _buildTextField(
               controller: _locationController,
               label: 'Work Location / Incident Location',
-              icon: Icons.place),
-          const SizedBox(height: 12),
+              icon: Icons.place_rounded),
+          const SizedBox(height: 16),
           _buildTextField(
               controller: _supervisorReportedToController,
-              label: 'Supervisor/Designate reported incident to'),
-          const SizedBox(height: 12),
+              label: 'Supervisor/Designate Reported To',
+              icon: Icons.person_search_rounded),
+          const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
@@ -401,48 +418,49 @@ class _IncidentReportFormWidgetState extends State<IncidentReportFormWidget> {
             ],
           ),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
           _buildSectionHeader('PART 2: INDIVIDUALS INVOLVED'),
           const SizedBox(height: 16),
           _buildTextField(
               controller: _workersController,
-              label: 'Workers',
-              required: false),
-          const SizedBox(height: 12),
+              label: 'Workers Involved',
+              required: false,
+              icon: Icons.group_rounded),
+          const SizedBox(height: 16),
           _buildTextField(
               controller: _clientsController,
-              label: 'Clients',
-              required: false),
-          const SizedBox(height: 12),
+              label: 'Clients Involved',
+              required: false,
+              icon: Icons.person_outline_rounded),
+          const SizedBox(height: 16),
           _buildTextField(
               controller: _othersController,
-              label: 'Other (please identify)',
-              required: false),
+              label: 'Other Individuals',
+              required: false,
+              icon: Icons.info_outline_rounded),
+          const SizedBox(height: 24),
+          const Text('Witness Information',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1A1A2E))),
           const SizedBox(height: 12),
-          const Text('Witness Information:',
-              style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
           _buildTextField(
               controller: _witnessNameController,
               label: 'Witness Name',
-              required: false),
-          const SizedBox(height: 8),
+              required: false,
+              icon: Icons.person_pin_rounded),
+          const SizedBox(height: 16),
           _buildTextField(
               controller: _witnessTitleController,
               label: 'Witness Job Title',
               required: false),
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
           _buildTextField(
               controller: _witnessContactController,
               label: 'Witness Contact Number',
-              required: false),
+              required: false,
+              icon: Icons.contact_phone_rounded),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
           _buildSectionHeader('PART 3: STATEMENT OF INCIDENT'),
-          const SizedBox(height: 4),
-          const Text('Do not write down personal opinions.',
-              style:
-                  TextStyle(fontStyle: FontStyle.italic, color: Colors.grey)),
           const SizedBox(height: 16),
 
           Row(
@@ -462,152 +480,155 @@ class _IncidentReportFormWidgetState extends State<IncidentReportFormWidget> {
               controller: _incidentDescriptionController,
               label: 'What was the incident?',
               maxLines: 3),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           _buildTextField(
               controller: _whoReportedController,
-              label: 'Who reported the incident? (Client, staff...)'),
-          const SizedBox(height: 12),
+              label: 'Who reported the incident?'),
+          const SizedBox(height: 16),
           _buildTextField(
               controller: _whatStatedController,
               label: 'What exactly did they state?',
               maxLines: 2),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           _buildTextField(
               controller: _personalObservationController,
-              label: 'What did you personally see/hear/note?',
+              label: 'Your personal observations',
               maxLines: 2),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           _buildTextField(
               controller: _sequenceController,
               label: 'Sequence of events leading up to incident',
               maxLines: 3),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
           const Divider(),
-          const SizedBox(height: 8),
+          const SizedBox(height: 24),
 
-          CheckboxListTile(
-            title: const Text('Did the client express pain/discomfort?'),
+          _buildCheckboxTile(
+            title: 'Did the client express pain/discomfort?',
             value: _painExpressed,
             onChanged: (val) => setState(() => _painExpressed = val ?? false),
-            controlAffinity: ListTileControlAffinity.leading,
-            contentPadding: EdgeInsets.zero,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           _buildTextField(
               controller: _clientConditionController,
-              label: 'What was the client\'s condition? (alert, responsive...)',
+              label: 'Client\'s condition (alert, responsive...)',
               maxLines: 2),
-          const SizedBox(height: 12),
-          CheckboxListTile(
-            title:
-                const Text('Did anyone get hurt or require medical attention?'),
+          const SizedBox(height: 24),
+          _buildCheckboxTile(
+            title: 'Did anyone get hurt/require medical attention?',
             value: _medicalAttentionRequired,
-            onChanged: (val) =>
-                setState(() => _medicalAttentionRequired = val ?? false),
-            controlAffinity: ListTileControlAffinity.leading,
-            contentPadding: EdgeInsets.zero,
+            onChanged: (val) => setState(() => _medicalAttentionRequired = val ?? false),
           ),
-          if (_medicalAttentionRequired)
+          if (_medicalAttentionRequired) ...[
+            const SizedBox(height: 16),
             _buildTextField(
                 controller: _injuryDetailsController,
-                label: 'Please provide details of injury/attention required',
+                label: 'Injury details / Attention required',
                 maxLines: 2),
+          ],
 
-          const SizedBox(height: 12),
-          CheckboxListTile(
-            title: const Text('Were there environmental hazards present?'),
+          const SizedBox(height: 24),
+          _buildCheckboxTile(
+            title: 'Were environmental hazards present?',
             value: _environmentalHazards,
             onChanged: (val) => setState(() => _environmentalHazards = val ?? false),
-            controlAffinity: ListTileControlAffinity.leading,
-            contentPadding: EdgeInsets.zero,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           _buildTextField(
               controller: _immediateActionsController,
               label: 'What actions did you take immediately?',
               maxLines: 3),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           _buildTextField(
               controller: _whoInformedController,
-              label: 'Who was informed? (supervisor, nurse, family)'),
+              label: 'Who was informed?'),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
           const Text(
+              'Declaration',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF1A1A2E))),
+          const SizedBox(height: 8),
+          Text(
               'I confirm that to the best of my knowledge the information contained in this document is true, complete, and correct.',
-              style: TextStyle(fontWeight: FontWeight.bold, height: 1.4)),
-          const SizedBox(height: 16),
+              style: TextStyle(color: Colors.grey.shade700, height: 1.4)),
+          const SizedBox(height: 20),
 
           Container(
             decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade400),
-              borderRadius: BorderRadius.circular(8),
+              color: const Color(0xFFF8F9FB),
+              border: Border.all(color: Colors.grey.shade200),
+              borderRadius: BorderRadius.circular(16),
             ),
-            child: Column(
-              children: [
-                Signature(
-                  controller: _signatureController,
-                  height: 120,
-                  backgroundColor: Colors.grey.shade100,
-                ),
-                Container(
-                  color: Colors.grey.shade200,
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      TextButton.icon(
-                        icon: const Icon(Icons.clear, size: 20),
-                        label: const Text('Clear'),
-                        onPressed: () => _signatureController.clear(),
-                      ),
-                      TextButton.icon(
-                        icon: const Icon(Icons.check, size: 20),
-                        label: const Text('Save Signature'),
-                        onPressed: () async {
-                          final signature =
-                              await _signatureController.toPngBytes();
-                          if (signature != null) {
-                            setState(() => _signatureImage = signature);
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content: Text('Signature captured!'),
-                                    duration: Duration(seconds: 1)),
-                              );
-                            }
-                          }
-                        },
-                      ),
-                    ],
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Column(
+                children: [
+                  Signature(
+                    controller: _signatureController,
+                    height: 150,
+                    backgroundColor: Colors.white,
                   ),
-                ),
-              ],
+                  Container(
+                    color: Colors.grey.shade50,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        TextButton.icon(
+                          icon: const Icon(Icons.clear, size: 20, color: Colors.red),
+                          label: const Text('Clear', style: TextStyle(color: Colors.red)),
+                          onPressed: () => _signatureController.clear(),
+                        ),
+                        TextButton.icon(
+                          icon: const Icon(Icons.check_circle_outline, size: 20, color: Color(0xFF1A73E8)),
+                          label: const Text('Save Signature', style: TextStyle(color: Color(0xFF1A73E8))),
+                          onPressed: () async {
+                            final signature = await _signatureController.toPngBytes();
+                            if (signature != null) {
+                              setState(() => _signatureImage = signature);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Signature captured!')),
+                                );
+                              }
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           if (_signatureImage != null) ...[
-            const SizedBox(height: 8),
-            const Text('Signature Saved ✅',
-                style: TextStyle(
-                    color: Colors.green, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            const Row(
+              children: [
+                Icon(Icons.check_circle, color: Color(0xFF4CAF50), size: 16),
+                SizedBox(width: 8),
+                Text('Signature ready', style: TextStyle(color: Color(0xFF4CAF50), fontWeight: FontWeight.bold)),
+              ],
+            ),
           ],
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 48),
           SizedBox(
             width: double.infinity,
+            height: 56,
             child: ElevatedButton(
               onPressed: _isSubmitting ? null : _submitForm,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue.shade700,
+                backgroundColor: const Color(0xFF1A73E8),
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                elevation: 4,
+                shadowColor: Colors.black.withOpacity(0.2),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               ),
               child: _isSubmitting
                   ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text('Submit Report', style: TextStyle(fontSize: 16)),
+                  : const Text('Submit Report', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             ),
           ),
         ],
@@ -618,14 +639,19 @@ class _IncidentReportFormWidgetState extends State<IncidentReportFormWidget> {
   Widget _buildSectionHeader(String title) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-      color: Colors.grey.shade700,
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F4FF),
+        border: const Border(left: BorderSide(color: Color(0xFF1A73E8), width: 4)),
+        borderRadius: BorderRadius.circular(4),
+      ),
       child: Text(
         title,
         style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.bold,
-          fontSize: 14,
+          color: Color(0xFF1A73E8),
+          fontWeight: FontWeight.w900,
+          fontSize: 13,
+          letterSpacing: 0.5,
         ),
       ),
     );
@@ -636,7 +662,7 @@ class _IncidentReportFormWidgetState extends State<IncidentReportFormWidget> {
     final valDate = isReported ? _dateReported : _incidentDate;
     final valTime = isReported ? _timeReported : _incidentTime;
 
-    String text = 'Select';
+    String text = 'Tap to select';
     if (isDate) {
       if (valDate != null) text = DateFormat('yyyy-MM-dd').format(valDate);
     } else {
@@ -646,24 +672,28 @@ class _IncidentReportFormWidgetState extends State<IncidentReportFormWidget> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-        const SizedBox(height: 4),
+        Text(label, style: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.bold, fontSize: 13)),
+        const SizedBox(height: 8),
         InkWell(
           onTap: () => isDate
               ? _selectDate(context, isReported)
               : _selectTime(context, isReported),
-          child: InputDecorator(
-            decoration: InputDecoration(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              border:
-                  OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-              suffixIcon: Icon(
-                  isDate ? Icons.calendar_today : Icons.access_time,
-                  size: 20),
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8F9FB),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade200),
             ),
-            child: Text(text),
+            child: Row(
+              children: [
+                Icon(isDate ? Icons.calendar_today_rounded : Icons.access_time_rounded,
+                  size: 18, color: const Color(0xFF1A1A2E)),
+                const SizedBox(width: 12),
+                Expanded(child: Text(text, style: const TextStyle(color: Color(0xFF1A1A2E), fontWeight: FontWeight.w500))),
+              ],
+            ),
           ),
         ),
       ],
@@ -677,17 +707,48 @@ class _IncidentReportFormWidgetState extends State<IncidentReportFormWidget> {
     bool required = true,
     IconData? icon,
   }) {
-    return TextFormField(
-      controller: controller,
-      maxLines: maxLines,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: icon != null ? Icon(icon, size: 22) : null,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.bold, fontSize: 13)),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: controller,
+          maxLines: maxLines,
+          decoration: InputDecoration(
+            prefixIcon: icon != null ? Icon(icon, size: 20, color: const Color(0xFF1A1A2E)) : null,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF1A73E8), width: 1.5)),
+            filled: true,
+            fillColor: const Color(0xFFF8F9FB),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCheckboxTile({
+    required String title,
+    required bool value,
+    required Function(bool?) onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade100),
       ),
-      validator: null, // Removed validation requirement
+      child: CheckboxListTile(
+        title: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+        value: value,
+        onChanged: onChanged,
+        controlAffinity: ListTileControlAffinity.leading,
+        contentPadding: EdgeInsets.zero,
+        activeColor: const Color(0xFF1A73E8),
+      ),
     );
   }
 }

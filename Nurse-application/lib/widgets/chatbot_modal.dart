@@ -31,6 +31,176 @@ class _ChatbotModalState extends State<ChatbotModal> {
     _loadChatHistory();
   }
 
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.9,
+      ),
+      decoration: const BoxDecoration(
+        color: Color(0xFFE8F0EE),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+      ),
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Standard Blue Gradient Header
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 20, 16, 20),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF1A73E8), Color(0xFF0D47A1)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white.withOpacity(0.2)),
+                    ),
+                    child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 22),
+                  ),
+                  const SizedBox(width: 16),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Zaq AI Assistant',
+                          style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5),
+                        ),
+                        Text(
+                          'Online • Typically replies instantly',
+                          style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.normal),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 30),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+
+            // Modern Horizontal FAQ Chips
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 2)),
+                ],
+              ),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: FAQData.getFAQQuestions().map((question) {
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 10),
+                      child: ActionChip(
+                        label: Text(
+                          question,
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF1A73E8)),
+                        ),
+                        onPressed: () => _onFAQSelected(question),
+                        backgroundColor: const Color(0xFFF0F4FF),
+                        side: BorderSide(color: const Color(0xFF1A73E8).withOpacity(0.1)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+
+            // Message List
+            Flexible(
+              child: ListView.builder(
+                controller: _scrollController,
+                padding: const EdgeInsets.fromLTRB(16, 24, 16, 32),
+                itemCount: _messages.length + (_isLoading ? 1 : 0),
+                itemBuilder: (context, index) {
+                  if (index == _messages.length) return const _TypingIndicator();
+                  return _ChatBubble(message: _messages[index]);
+                },
+              ),
+            ),
+
+            // Premium Bottom Input Field
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 34),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                boxShadow: [
+                  BoxShadow(color: Colors.black12, blurRadius: 20, offset: Offset(0, -5)),
+                ],
+              ),
+              child: Row(
+                children: [
+                   Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8F9FB),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: TextField(
+                        controller: _messageController,
+                        maxLines: null,
+                        style: const TextStyle(fontSize: 15, color: Color(0xFF1A1A2E)),
+                        decoration: const InputDecoration(
+                          hintText: 'Type your message...',
+                          hintStyle: TextStyle(color: Colors.grey, fontSize: 14),
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        ),
+                        onSubmitted: _isLoading ? null : _sendMessage,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  GestureDetector(
+                    onTap: _isLoading ? null : () => _sendMessage(_messageController.text),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF1A73E8), Color(0xFF0D47A1)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(color: const Color(0xFF1A73E8).withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4)),
+                        ],
+                      ),
+                      child: _isLoading
+                          ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.send_rounded, color: Colors.white, size: 22),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _addWelcomeMessage() {
     _messages.add(ChatMessage(
       text: 'Hello! I\'m Zaq. How can I help you today?',
@@ -282,23 +452,20 @@ class _ChatbotModalState extends State<ChatbotModal> {
     TimeOfDay endTime = const TimeOfDay(hour: 17, minute: 0);
     Uint8List? signatureImage;
     bool isSubmitting = false;
-    String? selectedLeaveType;
+    String? selectedLeaveType = 'Sick';
 
     const leaveTypes = [
       'Sick',
-      'Vacation',
-      'Leave of Absence',
-      'Float',
-      'Bereavement',
-      'Day in Lieu of Public Holiday',
-      'Other',
     ];
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Call in Sick'),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+          backgroundColor: Colors.white,
+          title: const Text('Call in Sick',
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 22, color: Color(0xFF1A1A2E))),
           content: SizedBox(
             width: double.maxFinite,
             child: SingleChildScrollView(
@@ -306,482 +473,246 @@ class _ChatbotModalState extends State<ChatbotModal> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // ── Leave Type Dropdown ──────────────────────────────────
-                  const Text('Leave Type:',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text('Leave Type', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Colors.grey)),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
                     value: selectedLeaveType,
+                    style: const TextStyle(color: Color(0xFF1A1A2E), fontSize: 15, fontWeight: FontWeight.w500),
                     decoration: InputDecoration(
                       hintText: 'Select leave type',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 14),
+                      filled: true,
+                      fillColor: const Color(0xFFF8F9FB),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     ),
-                    items: leaveTypes
-                        .map((type) => DropdownMenuItem(
-                              value: type,
-                              child: Text(type),
-                            ))
-                        .toList(),
-                    onChanged: (value) {
-                      setDialogState(() {
-                        selectedLeaveType = value;
-                      });
-                    },
+                    items: leaveTypes.map((type) => DropdownMenuItem(value: type, child: Text(type))).toList(),
+                    onChanged: (value) => setDialogState(() => selectedLeaveType = value),
                   ),
-                  const SizedBox(height: 16),
-                  // ── Leave Duration ───────────────────────────────────────
-                  const Text('Select Leave Duration:',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 20),
+                  const Text('Select Duration', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Colors.grey)),
                   const SizedBox(height: 8),
                   Row(
                     children: [
                       Expanded(
-                        child: InkWell(
+                        child: _buildDateTimePickerTile(
+                          label: 'From Date',
+                          value: "${fromDate.year}-${fromDate.month.toString().padLeft(2, '0')}-${fromDate.day.toString().padLeft(2, '0')}",
                           onTap: () async {
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: fromDate,
-                              firstDate: DateTime.now()
-                                  .subtract(const Duration(days: 30)),
-                              lastDate:
-                                  DateTime.now().add(const Duration(days: 365)),
-                            );
-                            if (picked != null) {
-                              setDialogState(() {
-                                fromDate = picked;
-                                if (toDate.isBefore(fromDate)) {
-                                  toDate = fromDate;
-                                }
-                              });
-                            }
+                            final picked = await showDatePicker(context: context, initialDate: fromDate, firstDate: DateTime.now().subtract(const Duration(days: 30)), lastDate: DateTime.now().add(const Duration(days: 365)));
+                            if (picked != null) setDialogState(() { fromDate = picked; if (toDate.isBefore(fromDate)) toDate = fromDate; });
                           },
-                          child: Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              border: Border.all(color: Colors.grey.shade400),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text('From Date',
-                                    style: TextStyle(
-                                        fontSize: 12, color: Colors.grey)),
-                                const SizedBox(height: 4),
-                                Text(
-                                  "${fromDate.year}-${fromDate.month.toString().padLeft(2, '0')}-${fromDate.day.toString().padLeft(2, '0')}",
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w500),
-                                ),
-                              ],
-                            ),
-                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: InkWell(
+                        child: _buildDateTimePickerTile(
+                          label: 'To Date',
+                          value: "${toDate.year}-${toDate.month.toString().padLeft(2, '0')}-${toDate.day.toString().padLeft(2, '0')}",
                           onTap: () async {
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: toDate,
-                              firstDate: fromDate,
-                              lastDate:
-                                  DateTime.now().add(const Duration(days: 365)),
-                            );
-                            if (picked != null) {
-                              setDialogState(() {
-                                toDate = picked;
-                              });
-                            }
+                            final picked = await showDatePicker(context: context, initialDate: toDate, firstDate: fromDate, lastDate: DateTime.now().add(const Duration(days: 365)));
+                            if (picked != null) setDialogState(() => toDate = picked);
                           },
-                          child: Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              border: Border.all(color: Colors.grey.shade400),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text('To Date',
-                                    style: TextStyle(
-                                        fontSize: 12, color: Colors.grey)),
-                                const SizedBox(height: 4),
-                                Text(
-                                  "${toDate.year}-${toDate.month.toString().padLeft(2, '0')}-${toDate.day.toString().padLeft(2, '0')}",
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w500),
-                                ),
-                              ],
-                            ),
-                          ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
                   Row(
                     children: [
                       Expanded(
-                        child: InkWell(
+                        child: _buildDateTimePickerTile(
+                          label: 'Start Time',
+                          value: "${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}",
                           onTap: () async {
-                            final picked = await showTimePicker(
-                              context: context,
-                              initialTime: startTime,
-                            );
-                            if (picked != null) {
-                              setDialogState(() {
-                                startTime = picked;
-                              });
-                            }
+                            final picked = await showTimePicker(context: context, initialTime: startTime);
+                            if (picked != null) setDialogState(() => startTime = picked);
                           },
-                          child: Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              border: Border.all(color: Colors.grey.shade400),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text('Start Time',
-                                    style: TextStyle(
-                                        fontSize: 12, color: Colors.grey)),
-                                const SizedBox(height: 4),
-                                Text(
-                                  "${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}",
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w500),
-                                ),
-                              ],
-                            ),
-                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: InkWell(
+                        child: _buildDateTimePickerTile(
+                          label: 'End Time',
+                          value: "${endTime.hour.toString().padLeft(2, '0')}:${endTime.minute.toString().padLeft(2, '0')}",
                           onTap: () async {
-                            final picked = await showTimePicker(
-                              context: context,
-                              initialTime: endTime,
-                            );
-                            if (picked != null) {
-                              setDialogState(() {
-                                endTime = picked;
-                              });
-                            }
+                            final picked = await showTimePicker(context: context, initialTime: endTime);
+                            if (picked != null) setDialogState(() => endTime = picked);
                           },
-                          child: Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              border: Border.all(color: Colors.grey.shade400),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text('End Time',
-                                    style: TextStyle(
-                                        fontSize: 12, color: Colors.grey)),
-                                const SizedBox(height: 4),
-                                Text(
-                                  "${endTime.hour.toString().padLeft(2, '0')}:${endTime.minute.toString().padLeft(2, '0')}",
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w500),
-                                ),
-                              ],
-                            ),
-                          ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  const Text('Please provide a reason for calling in sick:',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 20),
+                  const Text('Reason for Leave', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Colors.grey)),
                   const SizedBox(height: 8),
                   TextField(
                     controller: reasonController,
-                    decoration: const InputDecoration(
-                      labelText: 'Reason',
-                      hintText: 'e.g., Personal emergency, Family matter...',
-                      border: OutlineInputBorder(),
-                    ),
                     maxLines: 3,
+                    decoration: InputDecoration(
+                      hintText: 'e.g., Personal emergency, Sick...',
+                      filled: true,
+                      fillColor: const Color(0xFFF8F9FB),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                    ),
                   ),
-                  const SizedBox(height: 16),
-                  const Text('Please provide your signature:',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 20),
+                  const Text('Your Signature', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Colors.grey)),
                   const SizedBox(height: 8),
                   Container(
-                    width: double.infinity,
-                    constraints: const BoxConstraints(
-                      minHeight: 150,
-                      maxHeight: 200,
-                    ),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey.shade400),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                    decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade200), borderRadius: BorderRadius.circular(12), color: const Color(0xFFF8F9FB)),
                     child: Column(
-                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        SizedBox(
-                          height: 150,
-                          width: double.infinity,
-                          child: Signature(
-                            controller: signatureController,
-                            backgroundColor: Colors.grey.shade100,
-                          ),
-                        ),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: [
-                            TextButton.icon(
-                              icon: const Icon(Icons.delete_outline),
-                              label: const Text('Clear'),
-                              onPressed: () => signatureController.clear(),
-                            ),
-                            TextButton.icon(
-                              icon: const Icon(Icons.save_alt),
-                              label: const Text('Save'),
-                              onPressed: () async {
-                                final signature =
-                                    await signatureController.toPngBytes();
+                        SizedBox(height: 120, child: Signature(controller: signatureController, backgroundColor: Colors.transparent)),
+                        Container(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12))),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              TextButton.icon(icon: const Icon(Icons.refresh_rounded, size: 18, color: Color(0xFF1A73E8)), label: const Text('Clear', style: TextStyle(color: Color(0xFF1A73E8))), onPressed: () => signatureController.clear()),
+                              TextButton.icon(icon: const Icon(Icons.check_circle_outline_rounded, size: 18, color: Color(0xFF1A73E8)), label: const Text('Save', style: TextStyle(color: Color(0xFF1A73E8))), onPressed: () async {
+                                final signature = await signatureController.toPngBytes();
                                 if (signature != null) {
-                                  setDialogState(() {
-                                    signatureImage = signature;
-                                  });
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                          content: Text('Signature saved!')),
-                                    );
-                                  }
+                                  setDialogState(() => signatureImage = signature);
+                                  if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Signature saved!')));
                                 }
-                              },
-                            ),
-                          ],
+                              }),
+                            ],
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    '⚠️ Please tap "Save" to confirm your signature before submitting.',
-                    style: TextStyle(
-                      color: Colors.orange,
-                      fontSize: 12,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
                   if (signatureImage != null) ...[
-                    const SizedBox(height: 8),
-                    const Text('Signature preview:'),
+                    const SizedBox(height: 12),
+                    const Text('Preview:', style: TextStyle(fontSize: 11, color: Colors.grey)),
                     const SizedBox(height: 4),
-                    SizedBox(
-                      height: 80,
-                      child: Image.memory(signatureImage!),
-                    ),
+                    Center(child: Container(height: 60, decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade100), borderRadius: BorderRadius.circular(8)), child: Image.memory(signatureImage!))),
                   ],
                 ],
               ),
             ),
           ),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           actions: [
-            TextButton(
-              onPressed: () {
-                signatureController.dispose();
-                Navigator.of(context).pop();
-              },
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: isSubmitting
-                  ? null
-                  : () async {
-                      final reason = reasonController.text.trim();
-                      if (selectedLeaveType == null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text('Please select a leave type')),
-                        );
-                        return;
-                      }
-                      if (reason.isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text('Please provide a reason')),
-                        );
-                        return;
-                      }
-                      if (signatureImage == null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text('Please provide your signature')),
-                        );
-                        return;
-                      }
-
-                      // Set loading state
-                      setDialogState(() {
-                        isSubmitting = true;
-                      });
-
-                      // Upload signature to Supabase Storage
-                      try {
-                        final supabase = Supabase.instance.client;
-                        final timestamp = DateTime.now().millisecondsSinceEpoch;
-                        final fileName = 'sick_leave_signature_$timestamp.png';
-
-                        // Try to upload the signature
-                        try {
-                          await supabase.storage
-                              .from('sick_leave_signatures')
-                              .uploadBinary(fileName, signatureImage!);
-                        } catch (storageError) {
-                          final errorStr = storageError.toString();
-
-                          // Handle different storage errors
-                          if (errorStr.contains('Bucket not found') ||
-                              errorStr.contains('404')) {
-                            setDialogState(() {
-                              isSubmitting = false;
-                            });
-                            if (context.mounted) {
-                              showDialog(
-                                context: context,
-                                builder: (context) => AlertDialog(
-                                  title: const Text('Storage Bucket Missing'),
-                                  content: const Text(
-                                    'The storage bucket "sick_leave_signatures" does not exist.\n\n'
-                                    'Please create it in Supabase:\n'
-                                    '1. Go to Supabase Dashboard → Storage\n'
-                                    '2. Click "New bucket"\n'
-                                    '3. Name: sick_leave_signatures\n'
-                                    '4. Make it Public\n'
-                                    '5. Click "Create bucket"\n\n'
-                                    'Then try again.',
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () =>
-                                          Navigator.of(context).pop(),
-                                      child: const Text('OK'),
-                                    ),
-                                  ],
-                                ),
-                              );
+            Row(
+              children: [
+                TextButton(
+                  onPressed: () {
+                    signatureController.dispose();
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('Cancel',
+                      style: TextStyle(
+                          color: Colors.grey, fontWeight: FontWeight.w600)),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1A73E8),
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(double.infinity, 48),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      elevation: 0,
+                    ),
+                    onPressed: isSubmitting
+                        ? null
+                        : () async {
+                            final reason = reasonController.text.trim();
+                            if (selectedLeaveType == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                                  content: Text('Please select a leave type')));
+                              return;
                             }
-                            return;
-                          } else if (errorStr.contains('row-level security') ||
-                              errorStr.contains('RLS') ||
-                              errorStr.contains('403') ||
-                              errorStr.contains('Unauthorized')) {
-                            setDialogState(() {
-                              isSubmitting = false;
-                            });
-                            if (context.mounted) {
-                              showDialog(
-                                context: context,
-                                builder: (context) => AlertDialog(
-                                  title: const Text('Storage Permission Error'),
-                                  content: const Text(
-                                    'The storage bucket has Row-Level Security (RLS) enabled.\n\n'
-                                    'To fix this:\n\n'
-                                    'Option 1 (Recommended):\n'
-                                    '1. Go to Supabase Dashboard → Storage\n'
-                                    '2. Find "sick_leave_signatures" bucket\n'
-                                    '3. Click the bucket → Settings\n'
-                                    '4. Toggle "Public bucket" to ON\n'
-                                    '5. Save\n\n'
-                                    'Option 2 (If you need RLS):\n'
-                                    'Go to Storage → Policies and create a policy that allows INSERT for authenticated users.',
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () =>
-                                          Navigator.of(context).pop(),
-                                      child: const Text('OK'),
-                                    ),
-                                  ],
-                                ),
-                              );
+                            if (reason.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                                  content: Text('Please provide a reason')));
+                              return;
                             }
-                            return;
-                          }
-                          rethrow;
-                        }
-
-                        // Get public URL
-                        final publicUrl = supabase.storage
-                            .from('sick_leave_signatures')
-                            .getPublicUrl(fileName);
-
-                        debugPrint('✅ Signature uploaded: $publicUrl');
-
-                        // Close dialog and dispose controller
-                        if (context.mounted) {
-                          Navigator.of(context).pop();
-                        }
-                        signatureController.dispose();
-
-                        // Send message with reason, signature URL, and dates
-                        final fromStr =
-                            "${fromDate.year}-${fromDate.month.toString().padLeft(2, '0')}-${fromDate.day.toString().padLeft(2, '0')}";
-                        final toStr =
-                            "${toDate.year}-${toDate.month.toString().padLeft(2, '0')}-${toDate.day.toString().padLeft(2, '0')}";
-                        final startStr =
-                            "${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}:00";
-                        final endStr =
-                            "${endTime.hour.toString().padLeft(2, '0')}:${endTime.minute.toString().padLeft(2, '0')}:00";
-
-                        // Map leave type for database
-                        String dbLeaveType = 'leave';
-                        if (selectedLeaveType == 'Leave of Absence') {
-                          dbLeaveType = 'LOA';
-                        } else if (selectedLeaveType == 'Vacation') {
-                          dbLeaveType = 'vacation';
-                        }
-
-                        await _sendMessageWithSignature(
-                          'I need to take ${selectedLeaveType ?? "leave"} from $fromStr $startStr to $toStr $endStr. Reason: $reason',
-                          publicUrl,
-                          leaveStartDate: fromStr,
-                          leaveEndDate: toStr,
-                          startTime: startStr,
-                          endTime: endStr,
-                          leaveType: dbLeaveType,
-                        );
-                      } catch (e) {
-                        debugPrint('Error in call in sick: $e');
-                        setDialogState(() {
-                          isSubmitting = false;
-                        });
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Error: ${e.toString()}'),
-                              duration: const Duration(seconds: 4),
-                            ),
-                          );
-                        }
-                      }
-                    },
-              child: isSubmitting
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Submit'),
+                            if (signatureImage == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                                  content: Text('Please provide your signature')));
+                              return;
+                            }
+                            setDialogState(() => isSubmitting = true);
+                            try {
+                              final supabase = Supabase.instance.client;
+                              final timestamp =
+                                  DateTime.now().millisecondsSinceEpoch;
+                              final fileName =
+                                  'sick_leave_signature_$timestamp.png';
+                              await supabase.storage
+                                  .from('sick_leave_signatures')
+                                  .uploadBinary(fileName, signatureImage!);
+                              final publicUrl = supabase.storage
+                                  .from('sick_leave_signatures')
+                                  .getPublicUrl(fileName);
+                              if (context.mounted) Navigator.of(context).pop();
+                              signatureController.dispose();
+                              final fromStr =
+                                  "${fromDate.year}-${fromDate.month.toString().padLeft(2, '0')}-${fromDate.day.toString().padLeft(2, '0')}";
+                              final toStr =
+                                  "${toDate.year}-${toDate.month.toString().padLeft(2, '0')}-${toDate.day.toString().padLeft(2, '0')}";
+                              final startStr =
+                                  "${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}:00";
+                              final endStr =
+                                  "${endTime.hour.toString().padLeft(2, '0')}:${endTime.minute.toString().padLeft(2, '0')}:00";
+                               String dbLeaveType = 'Sick';
+                              if (selectedLeaveType == 'Leave of Absence') {
+                                dbLeaveType = 'LOA';
+                              } else if (selectedLeaveType == 'Vacation') {
+                                dbLeaveType = 'vacation';
+                              }
+                              await _sendMessageWithSignature(
+                                  'I need to take ${selectedLeaveType ?? "leave"} from $fromStr $startStr to $toStr $endStr. Reason: $reason',
+                                  publicUrl,
+                                  leaveStartDate: fromStr,
+                                  leaveEndDate: toStr,
+                                  startTime: startStr,
+                                  endTime: endStr,
+                                  leaveType: dbLeaveType);
+                            } catch (e) {
+                              setDialogState(() => isSubmitting = false);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Error: $e')));
+                              }
+                            }
+                          },
+                    child: isSubmitting
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
+                        : const Text('Submit Request',
+                            style: TextStyle(fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ],
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDateTimePickerTile({required String label, required String value, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade200), borderRadius: BorderRadius.circular(12), color: const Color(0xFFF8F9FB)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 4),
+            Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
           ],
         ),
       ),
@@ -796,100 +727,108 @@ class _ChatbotModalState extends State<ChatbotModal> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Cancel/Change Shift'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        backgroundColor: Colors.white,
+        title: const Text('Cancel/Change Shift', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 22, color: Color(0xFF1A1A2E))),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text(
-                  'Please provide the shift details you want to change:'),
-              const SizedBox(height: 16),
-              TextField(
-                controller: startTimeController,
-                decoration: const InputDecoration(
-                  labelText: 'Current Start Time',
-                  hintText: 'e.g., 9am or 9:00',
-                  border: OutlineInputBorder(),
-                ),
-              ),
+              const Text('Provide the shift details you wish to change:', style: TextStyle(fontSize: 14, color: Colors.grey, height: 1.4)),
+              const SizedBox(height: 20),
+              _buildModernTextField(controller: startTimeController, label: 'Current Start Time', hint: 'e.g., 9am or 9:00'),
               const SizedBox(height: 12),
-              TextField(
-                controller: endTimeController,
-                decoration: const InputDecoration(
-                  labelText: 'Current End Time',
-                  hintText: 'e.g., 5pm or 17:00',
-                  border: OutlineInputBorder(),
-                ),
-              ),
+              _buildModernTextField(controller: endTimeController, label: 'Current End Time', hint: 'e.g., 5pm or 17:00'),
               const SizedBox(height: 12),
-              TextField(
-                controller: reasonController,
-                decoration: const InputDecoration(
-                  labelText: 'Reason',
-                  hintText: 'Why do you need to change this shift?',
-                  border: OutlineInputBorder(),
-                ),
-                maxLines: 3,
-              ),
+              _buildModernTextField(controller: reasonController, label: 'Reason', hint: 'Why change this shift?', maxLines: 3),
             ],
           ),
         ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final reason = reasonController.text.trim();
-              final start = startTimeController.text.trim();
-              final end = endTimeController.text.trim();
-              Navigator.of(context).pop();
-              _sendMessage(
-                  'I cannot do the shift from $start to $end. Reason: $reason');
-            },
-            child: const Text('Submit'),
+          Row(
+            children: [
+              TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w600))),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1A73E8), foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
+                  onPressed: () {
+                    final reason = reasonController.text.trim();
+                    final start = startTimeController.text.trim();
+                    final end = endTimeController.text.trim();
+                    Navigator.of(context).pop();
+                    _sendMessage('I cannot do the shift from $start to $end. Reason: $reason');
+                  },
+                  child: const Text('Submit Request', style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
+  Widget _buildModernTextField({required TextEditingController controller, required String label, required String hint, int maxLines = 1}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Colors.grey)),
+        const SizedBox(height: 8),
+        TextField(
+          controller: controller,
+          maxLines: maxLines,
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Color(0xFF1A1A2E)),
+          decoration: InputDecoration(
+            hintText: hint,
+            filled: true,
+            fillColor: const Color(0xFFF8F9FB),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          ),
+        ),
+      ],
+    );
+  }
+
   void _showDelayDialog() {
     final reasonController = TextEditingController();
-
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delay in Arrival'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        backgroundColor: Colors.white,
+        title: const Text('Delay in Arrival', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 22, color: Color(0xFF1A1A2E))),
         content: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('Please provide a reason for the delay:'),
-            const SizedBox(height: 16),
-            TextField(
-              controller: reasonController,
-              decoration: const InputDecoration(
-                labelText: 'Reason',
-                hintText: 'e.g., Traffic, Personal emergency...',
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 3,
-            ),
+            const Text('Please provide a reason for the delay:', style: TextStyle(fontSize: 14, color: Colors.grey, height: 1.4)),
+            const SizedBox(height: 20),
+            _buildModernTextField(controller: reasonController, label: 'Reason', hint: 'e.g., Traffic, Personal emergency...', maxLines: 3),
           ],
         ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final reason = reasonController.text.trim();
-              Navigator.of(context).pop();
-              _sendMessage('I will be late for my shift. Reason: $reason');
-            },
-            child: const Text('Submit'),
+          Row(
+            children: [
+              TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w600))),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1A73E8), foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
+                  onPressed: () {
+                    final reason = reasonController.text.trim();
+                    Navigator.of(context).pop();
+                    _sendMessage('I will be late for my shift. Reason: $reason');
+                  },
+                  child: const Text('Submit Delay', style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -935,55 +874,48 @@ class _ChatbotModalState extends State<ChatbotModal> {
 
   Future<Shift?> _showShiftSelectionDialog(List<Shift> shifts) async {
     Shift? selectedShift = shifts.first;
-
     return await showDialog<Shift>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
-          title: const Text('Select Shift'),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+          backgroundColor: Colors.white,
+          title: const Text('Select Shift', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 22, color: Color(0xFF1A1A2E))),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text('Please select the shift timings:'),
-              const SizedBox(height: 16),
+              const Text('Please select the shift timing:', style: TextStyle(fontSize: 14, color: Colors.grey, height: 1.4)),
+              const SizedBox(height: 20),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey.shade400),
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(color: const Color(0xFFF8F9FB), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<Shift>(
                     isExpanded: true,
                     value: selectedShift,
-                    items: shifts.map((shift) {
-                      return DropdownMenuItem<Shift>(
-                        value: shift,
-                        child: Text(
-                           shift.formattedTimeRange,
-                          style: const TextStyle(fontWeight: FontWeight.w500),
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        selectedShift = value;
-                      });
-                    },
+                    style: const TextStyle(color: Color(0xFF1A1A2E), fontWeight: FontWeight.w600, fontSize: 15),
+                    items: shifts.map((shift) => DropdownMenuItem<Shift>(value: shift, child: Text(shift.formattedTimeRange))).toList(),
+                    onChanged: (value) => setState(() => selectedShift = value),
                   ),
                 ),
               ),
             ],
           ),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(selectedShift),
-              child: const Text('Next'),
+            Row(
+              children: [
+                TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w600))),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1A73E8), foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
+                    onPressed: () => Navigator.of(context).pop(selectedShift),
+                    child: const Text('Next', style: TextStyle(fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -1269,19 +1201,12 @@ class _ChatbotModalState extends State<ChatbotModal> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+          backgroundColor: Colors.white,
           title: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Expanded(child: Text('End Shift Early')),
-              IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () {
-                  signatureController.dispose();
-                  Navigator.of(context).pop();
-                },
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-              ),
+              const Expanded(child: Text('End Shift Early', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 22, color: Color(0xFF1A1A2E)))),
+              IconButton(icon: const Icon(Icons.close_rounded, color: Colors.grey), onPressed: () { signatureController.dispose(); Navigator.of(context).pop(); }),
             ],
           ),
           content: SizedBox(
@@ -1291,208 +1216,118 @@ class _ChatbotModalState extends State<ChatbotModal> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  _buildShiftSummaryCard(shift),
+                  const SizedBox(height: 20),
+                  const Text('End Time', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Colors.grey)),
+                  const SizedBox(height: 8),
+                  _buildDateTimePickerTile(
+                    label: 'Actual End Time',
+                    value: selectedEndTime != null ? selectedEndTime!.format(context) : 'Tap to select',
+                    onTap: () async {
+                      final picked = await showTimePicker(context: context, initialTime: selectedEndTime ?? TimeOfDay.now());
+                      if (picked != null) setDialogState(() => selectedEndTime = picked);
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  const Text('End confirmation requested. Please sign below.', style: TextStyle(fontSize: 14, color: Colors.grey, height: 1.4)),
+                  const SizedBox(height: 16),
+                  const Text('Signature', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Colors.grey)),
+                  const SizedBox(height: 8),
                   Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.blue.shade100),
-                    ),
+                    decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade200), borderRadius: BorderRadius.circular(12), color: const Color(0xFFF8F9FB)),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Client: ${shift.clientName}',
-                            style:
-                                const TextStyle(fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 4),
-                        Text('Program: ${shift.clientServiceType ?? "N/A"}'),
-                        const SizedBox(height: 4),
-                        Text('Time: ${shift.formattedTimeRange}'),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            const Text('Status: ',
-                                style: TextStyle(fontWeight: FontWeight.w500)),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: _getStatusColor(shift.shiftStatus),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                _formatStatus(shift.shiftStatus),
-                                style: const TextStyle(
-                                    color: Colors.white, fontSize: 12),
-                              ),
-                            ),
-                          ],
+                        SizedBox(height: 120, child: Signature(controller: signatureController, backgroundColor: Colors.transparent)),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(onPressed: () => signatureController.clear(), child: const Text('Clear Signature', style: TextStyle(color: Colors.grey, fontSize: 12))),
                         ),
                       ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  // Time input for when the shift actually ended
-                  const Text(
-                    'What time did the shift end?',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  InkWell(
-                    onTap: () async {
-                      final picked = await showTimePicker(
-                        context: context,
-                        initialTime: selectedEndTime ?? TimeOfDay.now(),
-                        helpText: 'SELECT END TIME',
-                      );
-                      if (picked != null) {
-                        setDialogState(() {
-                          selectedEndTime = picked;
-                        });
-                      }
-                    },
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 14,
-                      ),
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: selectedEndTime != null
-                              ? Colors.blue.shade300
-                              : Colors.grey.shade400,
-                        ),
-                        borderRadius: BorderRadius.circular(8),
-                        color: selectedEndTime != null
-                            ? Colors.blue.shade50
-                            : null,
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.access_time_rounded,
-                            color: selectedEndTime != null
-                                ? Colors.blue.shade600
-                                : Colors.grey.shade600,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              selectedEndTime != null
-                                  ? selectedEndTime!.format(context)
-                                  : 'Tap to select end time',
-                              style: TextStyle(
-                                fontSize: 15,
-                                color: selectedEndTime != null
-                                    ? Colors.black87
-                                    : Colors.grey.shade500,
-                                fontWeight: selectedEndTime != null
-                                    ? FontWeight.w500
-                                    : FontWeight.normal,
-                              ),
-                            ),
-                          ),
-                          if (selectedEndTime != null)
-                            Icon(
-                              Icons.check_circle,
-                              color: Colors.green.shade600,
-                              size: 20,
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Client booking ended early. Please sign below to confirm ending your shift now.',
-                    style: TextStyle(fontSize: 14),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text('Signature:'),
-                  const SizedBox(height: 8),
-                  Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey.shade400),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    height: 150,
-                    child: Signature(
-                      controller: signatureController,
-                      backgroundColor: Colors.grey.shade100,
-                    ),
-                  ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: () => signatureController.clear(),
-                      child: const Text('Clear Signature'),
                     ),
                   ),
                 ],
               ),
             ),
           ),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           actions: [
-            TextButton(
-              onPressed: () {
-                signatureController.dispose();
-                Navigator.of(context).pop();
-              },
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: isSubmitting
-                  ? null
-                  : () async {
-                      if (selectedEndTime == null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text(
-                                  'Please select the time the shift ended.')),
-                        );
-                        return;
-                      }
-
-                      if (signatureController.isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text('Please sign to confirm.')),
-                        );
-                        return;
-                      }
-
+            Row(
+              children: [
+                TextButton(onPressed: () { signatureController.dispose(); Navigator.of(context).pop(); }, child: const Text('Cancel', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w600))),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1A73E8), foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
+                    onPressed: isSubmitting ? null : () async {
+                      if (selectedEndTime == null) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select end time'))); return; }
+                      if (signatureController.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please sign to confirm'))); return; }
                       final signature = await signatureController.toPngBytes();
                       if (signature == null) return;
-
                       _submitShiftChangeRequest(
                         requestType: 'client_booking_ended_early',
                         shift: shift,
-                        reason:
-                            'Client booking ended early at ${selectedEndTime!.format(context)}',
+                        reason: 'Client booking ended early at ${selectedEndTime!.format(context)}',
                         signatureImage: signature,
                         newShiftStatus: 'completed',
                         actualEndTime: selectedEndTime,
-                        setLoading: (loading) {
-                          setDialogState(() => isSubmitting = loading);
-                        },
+                        setLoading: (loading) => setDialogState(() => isSubmitting = loading),
                       );
                     },
-              child: isSubmitting
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Confirm End Shift'),
+                    child: isSubmitting ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Confirm End Shift', style: TextStyle(fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildShiftSummaryCard(Shift shift) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: const Color(0xFFE3F2FD), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.blue.shade100)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.person_pin_rounded, size: 20, color: Color(0xFF1A73E8)),
+              const SizedBox(width: 8),
+              Expanded(child: Text(shift.clientName ?? 'N/A', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Color(0xFF1A1A2E)))),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildSummaryItem(Icons.work_outline_rounded, 'Program', shift.clientServiceType ?? 'N/A'),
+          const SizedBox(height: 8),
+          _buildSummaryItem(Icons.schedule_rounded, 'Timing', shift.formattedTimeRange),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Icon(Icons.info_outline_rounded, size: 16, color: Colors.blueGrey),
+              const SizedBox(width: 8),
+              const Text('Status: ', style: TextStyle(fontSize: 13, color: Colors.blueGrey)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(color: _getStatusColor(shift.shiftStatus), borderRadius: BorderRadius.circular(6)),
+                child: Text(_formatStatus(shift.shiftStatus).toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryItem(IconData icon, String label, String value) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: Colors.blueGrey),
+        const SizedBox(width: 8),
+        Text('$label: ', style: const TextStyle(fontSize: 13, color: Colors.blueGrey)),
+        Expanded(child: Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E)))),
+      ],
     );
   }
 
@@ -1503,13 +1338,7 @@ class _ChatbotModalState extends State<ChatbotModal> {
 
     if (shifts.isEmpty) {
       if (mounted) {
-        setState(() {
-          _messages.add(ChatMessage(
-            text: 'No shifts scheduled for today',
-            isBot: true,
-            timestamp: DateTime.now(),
-          ));
-        });
+        setState(() => _messages.add(ChatMessage(text: 'No shifts scheduled for today', isBot: true, timestamp: DateTime.now())));
         _scrollToBottom();
         _saveChatHistory();
       }
@@ -1517,42 +1346,26 @@ class _ChatbotModalState extends State<ChatbotModal> {
     }
 
     Shift? selectedShift = await _showShiftSelectionDialog(shifts);
-
     if (selectedShift == null || !mounted) return;
 
     final shiftObj = selectedShift;
-    if (!mounted) return;
-
-    final signatureController = SignatureController(
-      penStrokeWidth: 3,
-      penColor: Colors.black,
-      exportBackgroundColor: Colors.white,
-    );
+    final signatureController = SignatureController(penStrokeWidth: 3, penColor: Colors.black, exportBackgroundColor: Colors.white);
     bool isSubmitting = false;
 
-    // Determine dialog title and message based on issue type
-    String dialogTitle = issueType;
     String dialogMessage = issueType == 'Client cancelled'
         ? 'Client cancelled at the door. Please sign then continue.'
-        : '$issueType. Please sign below to confirm ending your shift now.';
+        : '$issueType. Please sign below to confirm status.';
 
     await showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+          backgroundColor: Colors.white,
           title: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(child: Text(dialogTitle)),
-              IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () {
-                  signatureController.dispose();
-                  Navigator.of(context).pop();
-                },
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-              ),
+              Expanded(child: Text(issueType, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 22, color: Color(0xFF1A1A2E)))),
+              IconButton(icon: const Icon(Icons.close_rounded, color: Colors.grey), onPressed: () { signatureController.dispose(); Navigator.of(context).pop(); }),
             ],
           ),
           content: SizedBox(
@@ -1562,126 +1375,55 @@ class _ChatbotModalState extends State<ChatbotModal> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.blue.shade100),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Client: ${shiftObj.clientName ?? "N/A"}',
-                            style:
-                                const TextStyle(fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 4),
-                        Text('Program: ${shiftObj.clientServiceType ?? "N/A"}'),
-                        const SizedBox(height: 4),
-                        Text('Time: ${shiftObj.formattedTimeRange}'),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            const Text('Status: ',
-                                style: TextStyle(fontWeight: FontWeight.w500)),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: _getStatusColor(shiftObj.shiftStatus),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                _formatStatus(shiftObj.shiftStatus),
-                                style: const TextStyle(
-                                    color: Colors.white, fontSize: 12),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
+                  _buildShiftSummaryCard(shiftObj),
+                  const SizedBox(height: 20),
+                  Text(dialogMessage, style: const TextStyle(fontSize: 14, color: Colors.grey, height: 1.4)),
                   const SizedBox(height: 16),
-                  Text(
-                    dialogMessage,
-                    style: const TextStyle(fontSize: 14),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text('Signature:'),
+                  const Text('Signature', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Colors.grey)),
                   const SizedBox(height: 8),
                   Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey.shade400),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    height: 150,
-                    child: Signature(
-                      controller: signatureController,
-                      backgroundColor: Colors.grey.shade100,
-                    ),
-                  ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: () => signatureController.clear(),
-                      child: const Text('Clear Signature'),
+                    decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade200), borderRadius: BorderRadius.circular(12), color: const Color(0xFFF8F9FB)),
+                    child: Column(
+                      children: [
+                        SizedBox(height: 120, child: Signature(controller: signatureController, backgroundColor: Colors.transparent)),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(onPressed: () => signatureController.clear(), child: const Text('Clear Signature', style: TextStyle(color: Colors.grey, fontSize: 12))),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
           ),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           actions: [
-            TextButton(
-              onPressed: () {
-                signatureController.dispose();
-                Navigator.of(context).pop();
-              },
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: isSubmitting
-                  ? null
-                  : () async {
-                      if (signatureController.isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text('Please sign to confirm.')),
-                        );
-                        return;
-                      }
-
+            Row(
+              children: [
+                TextButton(onPressed: () { signatureController.dispose(); Navigator.of(context).pop(); }, child: const Text('Cancel', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w600))),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1A73E8), foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
+                    onPressed: isSubmitting ? null : () async {
+                      if (signatureController.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please sign to confirm'))); return; }
                       final signature = await signatureController.toPngBytes();
                       if (signature == null) return;
-
-                      String requestTypeCode = 'other';
-                      if (issueType == 'Client not home') {
-                        requestTypeCode = 'client_not_home';
-                      }
-                      if (issueType == 'Client cancelled') {
-                        requestTypeCode = 'client_cancelled';
-                      }
-
+                      String requestTypeCode = issueType == 'Client not home' ? 'client_not_home' : issueType == 'Client cancelled' ? 'client_cancelled' : 'other';
                       _submitShiftChangeRequest(
                         requestType: requestTypeCode,
                         shift: shiftObj,
                         reason: issueType,
                         signatureImage: signature,
                         newShiftStatus: 'cancelled',
-                        setLoading: (loading) {
-                          setDialogState(() => isSubmitting = loading);
-                        },
+                        setLoading: (loading) => setDialogState(() => isSubmitting = loading),
                       );
                     },
-              child: isSubmitting
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text(
-                      'Confirm ${issueType == 'Client not home' ? 'Not Home' : issueType == 'Client cancelled' ? 'Cancellation' : 'Action'}'),
+                    child: isSubmitting ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : Text('Confirm ${issueType.split(' ').last}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -1689,239 +1431,7 @@ class _ChatbotModalState extends State<ChatbotModal> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
-    return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
-      child: Container(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.9,
-        ),
-        decoration: BoxDecoration(
-          color: theme.scaffoldBackgroundColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.2),
-              blurRadius: 20,
-              offset: const Offset(0, -5),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Modern Gradient Header
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: isDark
-                        ? [const Color(0xFF0F2027), const Color(0xFF203A43)]
-                        : [
-                            theme.colorScheme.primary,
-                            theme.colorScheme.secondary
-                          ],
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.smart_toy_rounded,
-                          color: Colors.white, size: 24),
-                    ),
-                    const SizedBox(width: 16),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Zaq',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Text(
-                            'Always here to help',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon:
-                          const Icon(Icons.close_rounded, color: Colors.white),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                  ],
-                ),
-              ),
-
-              // FAQ Chips (Scrollable horizontal list)
-              Container(
-                width: double.infinity,
-                padding:
-                    const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surface,
-                  border: Border(
-                    bottom: BorderSide(
-                        color: theme.dividerColor.withValues(alpha: 0.1)),
-                  ),
-                ),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: FAQData.getFAQQuestions().map((question) {
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: ActionChip(
-                          elevation: 0,
-                          label: Text(
-                            question,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: theme.colorScheme.primary,
-                            ),
-                          ),
-                          onPressed: () => _onFAQSelected(question),
-                          backgroundColor:
-                              theme.colorScheme.primary.withValues(alpha: 0.08),
-                          side: BorderSide.none,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-              ),
-
-              // Chat messages
-              Flexible(
-                child: Container(
-                  color: theme.scaffoldBackgroundColor,
-                  child: ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 20),
-                    itemCount: _messages.length + (_isLoading ? 1 : 0),
-                    itemBuilder: (context, index) {
-                      if (index == _messages.length) {
-                        return const _TypingIndicator();
-                      }
-
-                      final message = _messages[index];
-                      return _ChatBubble(message: message);
-                    },
-                  ),
-                ),
-              ),
-
-              // Input field area
-              Container(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surface,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, -2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.surfaceContainerHighest
-                              .withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                        child: TextField(
-                          controller: _messageController,
-                          decoration: const InputDecoration(
-                            hintText: 'Type your message...',
-                            border: InputBorder.none,
-                            contentPadding: EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 14,
-                            ),
-                          ),
-                          onSubmitted: _sendMessage,
-                          enabled: !_isLoading,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            theme.colorScheme.primary,
-                            theme.colorScheme.secondary
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: theme.colorScheme.primary
-                                .withValues(alpha: 0.3),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: IconButton(
-                        icon: _isLoading
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                      Colors.white),
-                                ),
-                              )
-                            : const Icon(Icons.send_rounded,
-                                color: Colors.white, size: 22),
-                        onPressed: _isLoading
-                            ? null
-                            : () => _sendMessage(_messageController.text),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class ChatMessage {
@@ -1943,32 +1453,37 @@ class _ChatBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final isBot = message.isBot;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.only(bottom: 24),
       child: Row(
-        mainAxisAlignment:
-            isBot ? MainAxisAlignment.start : MainAxisAlignment.end,
-        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisAlignment: isBot ? MainAxisAlignment.start : MainAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (isBot) ...[
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
-              child: Icon(Icons.smart_toy_rounded,
-                  size: 18, color: theme.colorScheme.primary),
+            Container(
+              margin: const EdgeInsets.only(top: 4),
+              child: const CircleAvatar(
+                radius: 14,
+                backgroundColor: Color(0xFF0D47A1),
+                child: Icon(Icons.auto_awesome_rounded, size: 14, color: Colors.white),
+              ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 10),
           ],
           Flexible(
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: isBot
-                    ? theme.colorScheme.surface
-                    : theme.colorScheme.primary,
+                color: isBot ? Colors.white : null,
+                gradient: isBot
+                    ? null
+                    : const LinearGradient(
+                        colors: [Color(0xFF1A73E8), Color(0xFF0D47A1)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(20),
                   topRight: const Radius.circular(20),
@@ -1977,32 +1492,33 @@ class _ChatBubble extends StatelessWidget {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 5,
-                    offset: const Offset(0, 2),
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
                   ),
                 ],
-                border: isBot
-                    ? Border.all(color: Colors.grey.withValues(alpha: 0.2))
-                    : null,
+                border: isBot ? Border.all(color: Colors.grey.shade100) : null,
               ),
               child: Text(
                 message.text,
                 style: TextStyle(
-                  color: isBot ? theme.colorScheme.onSurface : Colors.white,
-                  fontSize: 15,
-                  height: 1.4,
+                  color: isBot ? const Color(0xFF1A1A2E) : Colors.white,
+                  fontSize: 14,
+                  fontWeight: isBot ? FontWeight.w500 : FontWeight.w600,
+                  height: 1.5,
                 ),
               ),
             ),
           ),
           if (!isBot) ...[
-            const SizedBox(width: 8),
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: theme.colorScheme.secondary,
-              child: const Icon(Icons.person_rounded,
-                  size: 18, color: Colors.white),
+            const SizedBox(width: 10),
+            Container(
+              margin: const EdgeInsets.only(top: 4),
+              child: CircleAvatar(
+                radius: 14,
+                backgroundColor: Colors.white,
+                child: Icon(Icons.person_rounded, size: 16, color: Colors.grey.shade400),
+              ),
             ),
           ],
         ],
@@ -2016,54 +1532,45 @@ class _TypingIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.only(bottom: 24),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
-            radius: 16,
-            backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
-            child: Icon(Icons.smart_toy_rounded,
-                size: 18, color: theme.colorScheme.primary),
-          ),
-          const SizedBox(width: 8),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            margin: const EdgeInsets.only(top: 4),
+            child: const CircleAvatar(
+              radius: 14,
+              backgroundColor: Color(0xFF0D47A1),
+              child: Icon(Icons.auto_awesome_rounded, size: 14, color: Colors.white),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
+              color: Colors.white,
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(20),
                 topRight: Radius.circular(20),
                 bottomRight: Radius.circular(20),
               ),
-              border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
               boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 5,
-                  offset: const Offset(0, 2),
-                ),
+                BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4)),
               ],
+              border: Border.all(color: Colors.grey.shade100),
             ),
             child: SizedBox(
-              width: 32,
-              height: 12,
-              child: Center(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: List.generate(3, (index) {
-                    return Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.primary.withValues(alpha: 0.5),
-                        shape: BoxShape.circle,
-                      ),
-                    );
-                  }),
-                ),
+              width: 30,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: List.generate(3, (index) {
+                  return Container(
+                    width: 5,
+                    height: 5,
+                    decoration: const BoxDecoration(color: Color(0xFF1A73E8), shape: BoxShape.circle),
+                  );
+                }),
               ),
             ),
           ),

@@ -122,79 +122,74 @@ class _ShiftOffersPageState extends State<ShiftOffersPage>
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
+      backgroundColor: const Color(0xFFE8F0EE),
       appBar: AppBar(
+        centerTitle: true,
         title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Shift Offers'),
+            const Text('Shift Offers',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18, color: Colors.white)),
             Text(
-              'Employee ID: ${widget.employee.empId}',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w400),
+              'Available Offers for ID: ${widget.employee.empId}',
+              style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.8), fontWeight: FontWeight.normal),
             ),
           ],
         ),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: [
-            Tab(
-              text: 'History (${_counts['total']})',
-              icon: const Icon(Icons.history),
+        elevation: 0,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF1A73E8), Color(0xFF0D47A1)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-            Tab(
-              text: 'Pending (${_counts['pending']})',
-              icon: const Icon(Icons.pending_actions),
-            ),
-            Tab(
-              text: 'Accepted (${_counts['accepted']})',
-              icon: const Icon(Icons.check_circle_outline),
-            ),
-            Tab(
-              text: 'Rejected (${_counts['rejected']})',
-              icon: const Icon(Icons.cancel_outlined),
-            ),
-            Tab(
-              text: 'Today (${_counts['today']})',
-              icon: const Icon(Icons.today),
-            ),
-          ],
+          ),
         ),
+        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           IconButton(
-            icon: const Icon(Icons.bug_report),
-            onPressed: () => _runDiagnostic(context),
-            tooltip: 'Debug DB',
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh_rounded),
             onPressed: _loadOffers,
             tooltip: 'Refresh',
           ),
+          IconButton(
+            icon: const Icon(Icons.bug_report_outlined),
+            onPressed: () => _runDiagnostic(context),
+            tooltip: 'Diagnostic',
+          ),
         ],
+        bottom: TabBar(
+          controller: _tabController,
+          isScrollable: true,
+          indicatorColor: Colors.white,
+          indicatorWeight: 3,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white.withOpacity(0.6),
+          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+          tabs: [
+            Tab(text: 'All (${_counts['total']})'),
+            Tab(text: 'Pending (${_counts['pending']})'),
+            Tab(text: 'Accepted (${_counts['accepted']})'),
+            Tab(text: 'Rejected (${_counts['rejected']})'),
+            Tab(text: 'Today (${_counts['today']})'),
+          ],
+        ),
       ),
       body: _isLoading
-          ? const CustomLoadingScreen(
-              message: 'Loading offers...',
-              isOverlay: true,
-            )
+          ? const CustomLoadingScreen(message: 'Updating marketplace...', isOverlay: true)
           : Column(
               children: [
-                // Statistics Card
-                _buildStatisticsCard(theme),
-
-                // Tab Views
+                _buildModernStatistics(),
                 Expanded(
                   child: TabBarView(
                     controller: _tabController,
                     children: [
-                      _buildOffersList(_allOffers, 'No offers yet'),
-                      _buildOffersList(_pendingOffers, 'No pending offers'),
+                      _buildOffersList(_allOffers, 'No marketplace history'),
+                      _buildOffersList(_pendingOffers, 'No open offers available'),
                       _buildOffersList(_acceptedOffers, 'No accepted offers'),
                       _buildOffersList(_rejectedOffers, 'No rejected offers'),
-                      _buildOffersList(
-                          _todayOffers, 'No offers received today'),
+                      _buildOffersList(_todayOffers, 'No new offers today'),
                     ],
                   ),
                 ),
@@ -203,84 +198,44 @@ class _ShiftOffersPageState extends State<ShiftOffersPage>
     );
   }
 
-  Widget _buildStatisticsCard(ThemeData theme) {
+  Widget _buildModernStatistics() {
     return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(16),
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            theme.colorScheme.primary,
-            theme.colorScheme.primary.withValues(alpha: 0.7),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: theme.colorScheme.primary.withValues(alpha: 0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
           ),
         ],
       ),
-      child: Column(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          Text(
-            'Offer Statistics',
-            style: theme.textTheme.titleLarge?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildStatItem(
-                'Total',
-                _counts['total'].toString(),
-                Icons.assessment,
-                Colors.white,
-              ),
-              _buildStatItem(
-                'Pending',
-                _counts['pending'].toString(),
-                Icons.pending,
-                Colors.orange.shade200,
-              ),
-              _buildStatItem(
-                'Acceptance',
-                '${_acceptanceRate.toStringAsFixed(1)}%',
-                Icons.trending_up,
-                Colors.green.shade200,
-              ),
-            ],
-          ),
+          _buildStatItem('TOTAL', _counts['total'].toString(), const Color(0xFF1A73E8)),
+          _buildStatItem('PENDING', _counts['pending'].toString(), Colors.orange),
+          _buildStatItem('RATE', '${_acceptanceRate.toStringAsFixed(0)}%', Colors.green),
         ],
       ),
     );
   }
 
-  Widget _buildStatItem(
-      String label, String value, IconData icon, Color color) {
+  Widget _buildStatItem(String label, String value, Color color) {
     return Column(
       children: [
-        Icon(icon, color: color, size: 32),
-        const SizedBox(height: 8),
         Text(
           value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: color),
         ),
+        const SizedBox(height: 2),
         Text(
           label,
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.9),
-            fontSize: 12,
-          ),
+          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.grey.shade400, letterSpacing: 0.5),
         ),
       ],
     );
@@ -292,19 +247,13 @@ class _ShiftOffersPageState extends State<ShiftOffersPage>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.inbox_outlined,
-              size: 64,
-              color: Colors.grey.shade400,
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)]),
+              child: Icon(Icons.inventory_2_outlined, size: 50, color: Colors.grey.shade300),
             ),
             const SizedBox(height: 16),
-            Text(
-              emptyMessage,
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey.shade600,
-              ),
-            ),
+            Text(emptyMessage, style: TextStyle(fontSize: 15, color: Colors.grey.shade500, fontWeight: FontWeight.w500)),
           ],
         ),
       );
@@ -313,15 +262,16 @@ class _ShiftOffersPageState extends State<ShiftOffersPage>
     return AnimationLimiter(
       child: RefreshIndicator(
         onRefresh: _loadOffers,
+        color: const Color(0xFF1A73E8),
         child: ListView.builder(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           itemCount: offers.length,
           itemBuilder: (context, index) {
             return AnimationConfiguration.staggeredList(
               position: index,
               duration: const Duration(milliseconds: 375),
               child: SlideAnimation(
-                verticalOffset: 50.0,
+                verticalOffset: 30.0,
                 child: FadeInAnimation(
                   child: _buildOfferCard(offers[index]),
                 ),
@@ -334,434 +284,259 @@ class _ShiftOffersPageState extends State<ShiftOffersPage>
   }
 
   Widget _buildOfferCard(ShiftOfferRecord offer) {
-    final theme = Theme.of(context);
-
     Color statusColor;
     Color statusBgColor;
     IconData statusIcon;
 
     switch (offer.status?.toLowerCase()) {
       case 'accepted':
-        statusColor = Colors.green;
-        statusBgColor = Colors.green.shade50;
-        statusIcon = Icons.check_circle;
+        statusColor = const Color(0xFF2E7D32);
+        statusBgColor = const Color(0xFFE8F5E9);
+        statusIcon = Icons.check_circle_rounded;
         break;
       case 'rejected':
-        statusColor = Colors.red;
-        statusBgColor = Colors.red.shade50;
-        statusIcon = Icons.cancel;
+        statusColor = const Color(0xFFC62828);
+        statusBgColor = const Color(0xFFFFEBEE);
+        statusIcon = Icons.cancel_rounded;
         break;
       case 'pending':
-        statusColor = Colors.orange;
-        statusBgColor = Colors.orange.shade50;
-        statusIcon = Icons.pending;
-        break;
-      case 'expired':
-        statusColor = Colors.grey;
-        statusBgColor = Colors.grey.shade50;
-        statusIcon = Icons.access_time;
+        statusColor = const Color(0xFFEF6C00);
+        statusBgColor = const Color(0xFFFFF3E0);
+        statusIcon = Icons.hourglass_top_rounded;
         break;
       default:
-        statusColor = Colors.blue;
-        statusBgColor = Colors.blue.shade50;
-        statusIcon = Icons.info;
+        statusColor = const Color(0xFF1565C0);
+        statusBgColor = const Color(0xFFE3F2FD);
+        statusIcon = Icons.info_rounded;
     }
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: statusColor.withValues(alpha: 0.3),
-          width: 1,
-        ),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: InkWell(
         onTap: () => _showOfferDetails(offer),
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header Row
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        borderRadius: BorderRadius.circular(20),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Offer ID and Order
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(color: const Color(0xFFF0F4FF), borderRadius: BorderRadius.circular(8)),
+                        child: Text(
+                          'ID: #${offer.offersId}',
+                          style: const TextStyle(color: Color(0xFF1A73E8), fontWeight: FontWeight.w800, fontSize: 11),
                         ),
-                        decoration: BoxDecoration(
-                          color:
-                              theme.colorScheme.primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(color: statusBgColor, borderRadius: BorderRadius.circular(12), border: Border.all(color: statusColor.withOpacity(0.1))),
                         child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
-                              Icons.tag,
-                              size: 16,
-                              color: theme.colorScheme.primary,
-                            ),
-                            const SizedBox(width: 4),
+                            Icon(statusIcon, size: 14, color: statusColor),
+                            const SizedBox(width: 6),
                             Text(
-                              'Offer #${offer.offersId}',
-                              style: TextStyle(
-                                color: theme.colorScheme.primary,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
+                              offer.statusDisplay.toUpperCase(),
+                              style: TextStyle(color: statusColor, fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 0.5),
                             ),
                           ],
                         ),
                       ),
-                      if (offer.offerOrder != null) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade200,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            'Order: ${offer.offerOrder}',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
                     ],
                   ),
-
-                  // Status Badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: statusBgColor,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: statusColor, width: 1),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(statusIcon, size: 14, color: statusColor),
-                        const SizedBox(width: 4),
-                        Text(
-                          offer.statusDisplay,
-                          style: TextStyle(
-                            color: statusColor,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 11,
-                          ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(color: const Color(0xFFF8F9FB), borderRadius: BorderRadius.circular(12)),
+                        child: const Icon(Icons.person_outline_rounded, color: Color(0xFF1A1A2E), size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('CLIENT NAME', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
+                            Text(offer.clientName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF1A1A2E))),
+                          ],
                         ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: const Color(0xFFF8F9FB), borderRadius: BorderRadius.circular(16)),
+                    child: Row(
+                      children: [
+                        _buildInfoItem(Icons.calendar_month_rounded, 'DATE', offer.shiftDate ?? 'N/A'),
+                        Container(width: 1, height: 24, color: Colors.grey.shade200, margin: const EdgeInsets.symmetric(horizontal: 16)),
+                        _buildInfoItem(Icons.schedule_rounded, 'TIME', offer.shiftTimeDisplay),
                       ],
                     ),
                   ),
-                ],
-              ),
-
-              const SizedBox(height: 12),
-              const Divider(height: 1),
-              const SizedBox(height: 12),
-
-              // Details Grid
-              Row(
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: _buildInfoItem(
-                      Icons.calendar_today,
-                      'Shift Date',
-                      offer.shiftDate ?? 'Unknown',
-                      theme,
-                    ),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: _buildInfoItem(
-                      Icons.access_time,
-                      'Time',
-                      offer.shiftTimeDisplay,
-                      theme,
-                    ),
-                  ),
-                  Expanded(
-                    flex: 3,
-                    child: _buildInfoItem(
-                      Icons.person_outline,
-                      'Client',
-                      offer.clientName,
-                      theme,
-                    ),
-                  ),
-                ],
-              ),
-
-              if (offer.clientAddress != null) ...[
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Icon(Icons.location_on_outlined,
-                        size: 14, color: Colors.grey.shade600),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        offer.clientAddress!,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade700,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                  if (offer.clientAddress != null) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on_rounded, size: 14, color: Colors.redAccent),
+                        const SizedBox(width: 4),
+                        Expanded(child: Text(offer.clientAddress!, style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                      ],
                     ),
                   ],
-                ),
-              ],
-
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Icon(Icons.mark_email_read_outlined,
-                      size: 14, color: Colors.grey.shade600),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Received: ${offer.timeSinceSent}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.grey.shade600,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
                 ],
               ),
-
-              if (offer.responseTime != null) ...[
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Icon(Icons.timer_outlined,
-                        size: 14, color: Colors.grey.shade600),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Responded in ${offer.responseDuration}',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey.shade600,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-              if (offer.isPending) ...[
-                const SizedBox(height: 16),
-                Row(
+            ),
+            if (offer.isPending)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(color: const Color(0xFFF8F9FB), borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20))),
+                child: Row(
                   children: [
                     Expanded(
-                      child: ElevatedButton.icon(
+                      child: ElevatedButton(
                         onPressed: () => _handleOfferAction(offer, 'accepted'),
-                        icon: const Icon(Icons.check, size: 18),
-                        label: const Text('Accept'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
+                          backgroundColor: const Color(0xFF1A73E8),
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
                           elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
+                        child: const Text('Claim Shift', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: OutlinedButton.icon(
+                      child: TextButton(
                         onPressed: () => _handleOfferAction(offer, 'rejected'),
-                        icon: const Icon(Icons.close, size: 18),
-                        label: const Text('Reject'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.red,
-                          side: BorderSide(color: Colors.red.shade200),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        style: TextButton.styleFrom(
+                          foregroundColor: const Color(0xFFC62828),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: const Color(0xFFC62828).withOpacity(0.2))),
                         ),
+                        child: const Text('Decline', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
                       ),
                     ),
                   ],
                 ),
-              ],
-            ],
-          ),
+              ),
+          ],
         ),
       ),
     );
   }
 
-  Future<void> _handleOfferAction(ShiftOfferRecord offer, String status) async {
-    // Optimistic UI update could be done here, but for now we'll show loading
-    setState(() => _isLoading = true);
-
-    final success = await ShiftOffersService.updateOfferStatus(
-      offersId: offer.offersId,
-      status: status,
-      shiftId: offer.shiftId,
-      empId: offer.empId,
-    );
-
-    if (!mounted) return;
-
-    if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              Icon(
-                status == 'accepted'
-                    ? Icons.check_circle
-                    : Icons.check_circle_outline,
-                color: Colors.white,
-              ),
-              const SizedBox(width: 8),
-              Text('Offer $status successfully'),
-            ],
-          ),
-          backgroundColor:
-              status == 'accepted' ? Colors.green : Colors.grey[700],
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      // Reload to reflect changes in lists and counts
-      _loadOffers();
-    } else {
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to update offer status'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-  }
-
-  Widget _buildInfoItem(
-      IconData icon, String label, String value, ThemeData theme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(icon, size: 14, color: Colors.grey.shade600),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                color: Colors.grey.shade600,
-                fontWeight: FontWeight.w500,
-              ),
+  Widget _buildInfoItem(IconData icon, String label, String value) {
+    return Expanded(
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: const Color(0xFF1A73E8)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 0.5)),
+                Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E)), overflow: TextOverflow.ellipsis),
+              ],
             ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
           ),
-          overflow: TextOverflow.ellipsis,
-          maxLines: 1,
-        ),
-      ],
+        ],
+      ),
     );
   }
 
   void _showOfferDetails(ShiftOfferRecord offer) {
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      backgroundColor: Colors.white,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.info_outline),
-            const SizedBox(width: 8),
-            Text('Offer #${offer.offersId}'),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Offer Details', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF1A1A2E))),
+                IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded)),
+              ],
+            ),
+            const SizedBox(height: 24),
+            _buildDetailRow('Offer ID', '#${offer.offersId}'),
+            _buildDetailRow('Status', offer.statusDisplay),
+            _buildDetailRow('Client', offer.clientName),
+            _buildDetailRow('Date', offer.shiftDate ?? 'N/A'),
+            _buildDetailRow('Time', offer.shiftTimeDisplay),
+            _buildDetailRow('Address', offer.clientAddress ?? 'N/A'),
+            _buildDetailRow('Received', offer.formattedSentAt),
+            if (offer.responseTime != null) _buildDetailRow('Responded', offer.formattedResponseTime),
+            const SizedBox(height: 32),
           ],
         ),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildDetailRow('Offer ID', offer.offersId.toString()),
-              _buildDetailRow('Status', offer.statusDisplay),
-              const Divider(),
-              const Text('Shift Details',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              _buildDetailRow('Date', offer.shiftDate ?? 'N/A'),
-              _buildDetailRow('Time', offer.shiftTimeDisplay),
-              _buildDetailRow('Shift ID', offer.shiftId?.toString() ?? 'N/A'),
-              const Divider(),
-              const Text('Client Details',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              _buildDetailRow('Client', offer.clientName),
-              _buildDetailRow('Address', offer.clientAddress ?? 'N/A'),
-              const Divider(),
-              const Text('Timeline',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              _buildDetailRow('Sent At', offer.formattedSentAt),
-              _buildDetailRow('Response Time', offer.formattedResponseTime),
-              if (offer.responseTime != null)
-                _buildDetailRow('Response Duration', offer.responseDuration),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
       ),
     );
   }
 
   Widget _buildDetailRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              '$label:',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 13,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontSize: 13),
-            ),
-          ),
+          Text(label, style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.bold, fontSize: 13)),
+          Text(value, style: const TextStyle(color: Color(0xFF1A1A2E), fontWeight: FontWeight.w800, fontSize: 13)),
         ],
       ),
     );
+  }
+
+  Future<void> _handleOfferAction(ShiftOfferRecord offer, String status) async {
+    setState(() => _isLoading = true);
+    final success = await ShiftOffersService.updateOfferStatus(
+      offersId: offer.offersId,
+      status: status,
+      shiftId: offer.shiftId,
+      empId: offer.empId,
+    );
+    if (!mounted) return;
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Marketplace updated successfully'),
+          backgroundColor: const Color(0xFF1A73E8),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      _loadOffers();
+    } else {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update marketplace'), backgroundColor: Colors.red, behavior: SnackBarBehavior.floating),
+      );
+    }
   }
 
   Future<void> _runDiagnostic(BuildContext context) async {

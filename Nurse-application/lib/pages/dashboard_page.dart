@@ -38,37 +38,17 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Future<void> _loadEmployeeData() async {
     try {
-      final user = supabase.auth.currentUser;
-      if (user == null) {
+      final empId = await SessionManager.getEmpId();
+      if (empId == null) {
         setState(() => _isLoading = false);
         return;
       }
 
-      // Step 1: Try fetch using user_id
-      final userIdResponse = await supabase
-          .from(Tables.employee)
-          .select()
-          .eq('user_id', user.id)
-          .limit(1);
-
-      var employeeData =
-          (userIdResponse as List).isNotEmpty ? userIdResponse.first : null;
-
-      // Step 2: Fallback → fetch using email if needed
-      if (employeeData == null && user.email != null) {
-        final emailResponse = await supabase
-            .from(Tables.employee)
-            .select()
-            .eq('email', user.email!)
-            .limit(1);
-
-        employeeData =
-            (emailResponse as List).isNotEmpty ? emailResponse.first : null;
-      }
+      final employeeData = await SessionManager.getEmployeeData();
 
       if (employeeData != null) {
         setState(() {
-          _employee = Employee.fromJson(employeeData as Map<String, dynamic>);
+          _employee = Employee.fromJson(employeeData);
           _isLoading = false;
         });
 
@@ -106,16 +86,18 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Future<void> _signOut() async {
     try {
-      // ✅ Step 1: Supabase logout
-      await supabase.auth.signOut(scope: SignOutScope.global);
-
-      // Dispose shift offer system
-      disposeShiftOfferSystem();
-
-      // ✅ Step 2: Clear local session
+      // ✅ Step 1: Clear local session
       await SessionManager.clearSession();
 
-      // ✅ Step 3: Navigate to login
+      // ✅ Step 2: Dispose shift offer system
+      disposeShiftOfferSystem();
+
+      // ✅ Step 3: Optional Supabase logout (won't hurt)
+      try {
+        await supabase.auth.signOut(scope: SignOutScope.global);
+      } catch (_) {}
+
+      // ✅ Step 4: Navigate to login
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (context) => const LoginPage()),
@@ -163,7 +145,8 @@ class _DashboardPageState extends State<DashboardPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Welcome, ${_employee!.firstName}'),
+        title: Text('Welcome, ${_employee!.firstName}',
+            overflow: TextOverflow.ellipsis),
         elevation: 2,
         actions: [
           IconButton(
@@ -440,6 +423,8 @@ class _DashboardCard extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                       color: Theme.of(context).colorScheme.onSurface,
                     ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
               if (subtitle != null) ...[
                 const SizedBox(height: 8),
@@ -451,6 +436,8 @@ class _DashboardCard extends StatelessWidget {
                             .onSurface
                             .withOpacity(0.7),
                       ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
               const SizedBox(height: 16),
@@ -529,6 +516,8 @@ class _DashboardCard extends StatelessWidget {
                 color: Theme.of(context).colorScheme.onSurface,
               ),
           textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
       ],
     );

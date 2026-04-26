@@ -39,7 +39,24 @@ class _TaskListScreenState extends State<TaskListScreen> {
       _error = null;
     });
     try {
-      final tasks = await _service.getShiftTasks(widget.shift.shiftId);
+      List<ShiftTask> tasks = await _service.getShiftTasks(widget.shift.shiftId);
+      
+      // Fallback: If no shift_tasks exist yet, show the Care Plan tasks
+      if (tasks.isEmpty && widget.shift.client?.carePlans != null) {
+        for (final cp in widget.shift.client!.carePlans!) {
+          for (final t in cp.tasks) {
+            tasks.add(ShiftTask(
+              shiftTaskId: t.taskId, // Synthetic ID
+              shiftId: widget.shift.shiftId,
+              taskId: t.taskId,
+              taskName: t.taskName,
+              isTemporary: false,
+              status: 'pending',
+            ));
+          }
+        }
+      }
+
       if (mounted) {
         setState(() {
           _tasks = tasks;
@@ -122,8 +139,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
         content: Text(msg),
         backgroundColor: isError ? Colors.red.shade700 : Colors.green.shade700,
         behavior: SnackBarBehavior.floating,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }
@@ -132,11 +148,9 @@ class _TaskListScreenState extends State<TaskListScreen> {
   // PROGRESS
   // ─────────────────────────────────────────────
 
-  int get _doneCount =>
-      _tasks.where((t) => t.isDone || t.isSkipped).length;
+  int get _doneCount => _tasks.where((t) => t.isDone || t.isSkipped).length;
   int get _totalCount => _tasks.length;
-  double get _progress =>
-      _totalCount == 0 ? 0 : _doneCount / _totalCount;
+  double get _progress => _totalCount == 0 ? 0 : _doneCount / _totalCount;
 
   // ─────────────────────────────────────────────
   // BUILD
@@ -144,453 +158,146 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
     return Scaffold(
-      appBar: AppBar(
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      backgroundColor: const Color(0xFFE8F0EE), // Light mint/grey background from SC
+      body: SafeArea(
+        child: Column(
           children: [
-            Text(
-              widget.shift.clientName ?? 'Tasks',
-              style: TextStyle(
-                color: colorScheme.onSurface,
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
+            const SizedBox(height: 32),
+            // Header: Icon + Title
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1A73E8),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.assignment_rounded, 
+                      color: Colors.white, size: 24),
+                  ),
+                  const SizedBox(width: 16),
+                  const Text(
+                    'Shift Tasks',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1A1A2E),
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                ],
               ),
             ),
-            Text(
-              widget.shift.formattedTimeRange,
-              style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13),
+            const SizedBox(height: 32),
+
+            // Task List
+            Expanded(
+              child: _buildBody(),
+            ),
+
+            // Footer: Close Button
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(
+                      'Close',
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadTasks,
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Progress bar
-          _buildProgressHeader(theme, colorScheme),
-          // Task list
-          Expanded(child: _buildBody(theme, colorScheme)),
-        ],
       ),
     );
   }
 
-  Widget _buildProgressHeader(ThemeData theme, ColorScheme colorScheme) {
-    return Container(
-      color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '$_doneCount of $_totalCount tasks completed',
-                style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13),
-              ),
-              Text(
-                '${(_progress * 100).toInt()}%',
-                style: TextStyle(
-                  color: _progress == 1
-                      ? Colors.green
-                      : colorScheme.primary,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: LinearProgressIndicator(
-              value: _progress,
-              minHeight: 8,
-              backgroundColor: colorScheme.onSurface.withValues(alpha: 0.1),
-              valueColor: AlwaysStoppedAnimation<Color>(
-                _progress == 1 ? Colors.green : colorScheme.primary,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBody(ThemeData theme, ColorScheme colorScheme) {
+  Widget _buildBody() {
     if (_loading) {
-      return Center(
-          child: CircularProgressIndicator(color: colorScheme.primary));
+      return const Center(child: CircularProgressIndicator(color: Color(0xFF1A73E8)));
     }
 
     if (_error != null) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error_outline, color: colorScheme.error, size: 48),
-            const SizedBox(height: 12),
-            Text(_error!, style: TextStyle(color: colorScheme.error)),
-            const SizedBox(height: 16),
-            ElevatedButton(onPressed: _loadTasks, child: const Text('Retry')),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline_rounded, color: Colors.orange, size: 48),
+              const SizedBox(height: 16),
+              Text(_error!, textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade700)),
+              const SizedBox(height: 16),
+              ElevatedButton(onPressed: _loadTasks, child: const Text('Retry')),
+            ],
+          ),
         ),
       );
     }
 
     if (_tasks.isEmpty) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.checklist,
-                color: colorScheme.onSurface.withValues(alpha: 0.3), size: 64),
-            const SizedBox(height: 16),
-            Text(
-              'No tasks for this shift',
-              style: TextStyle(
-                color: colorScheme.onSurface.withValues(alpha: 0.6),
-                fontSize: 16,
-              ),
-            ),
-          ],
+        child: Text(
+          'No tasks for this shift',
+          style: TextStyle(color: Colors.grey.shade500, fontSize: 16),
         ),
       );
     }
 
-    // Group tasks by category
-    final grouped = <String, List<ShiftTask>>{};
-    for (final t in _tasks) {
-      final cat = t.category ?? 'General';
-      grouped.putIfAbsent(cat, () => []).add(t);
-    }
-
-    return RefreshIndicator(
-      onRefresh: _loadTasks,
-      color: colorScheme.primary,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
-        children: grouped.entries.map((entry) {
-          return _CategorySection(
-            category: entry.key,
-            tasks: entry.value,
-            updatingTasks: _updatingTasks,
-            onDone: _markDone,
-            onSkip: _skipTask,
-          );
-        }).toList(),
+    return ListView.separated(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      itemCount: _tasks.length,
+      separatorBuilder: (context, index) => Divider(
+        color: Colors.black.withOpacity(0.1),
+        height: 48,
+        thickness: 0.8,
       ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────
-// CATEGORY SECTION
-// ─────────────────────────────────────────────
-
-class _CategorySection extends StatelessWidget {
-  final String category;
-  final List<ShiftTask> tasks;
-  final Set<int> updatingTasks;
-  final Future<void> Function(ShiftTask) onDone;
-  final Future<void> Function(ShiftTask) onSkip;
-
-  const _CategorySection({
-    required this.category,
-    required this.tasks,
-    required this.updatingTasks,
-    required this.onDone,
-    required this.onSkip,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Category header
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(
-            children: [
-              Container(
-                width: 4,
-                height: 16,
-                decoration: BoxDecoration(
-                  color: colorScheme.primary,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                category.toUpperCase(),
-                style: TextStyle(
-                  color: colorScheme.primary,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                  letterSpacing: 1.2,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                '(${tasks.length})',
-                style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12),
-              ),
-            ],
-          ),
-        ),
-        ...tasks.map((t) => _TaskCard(
-              task: t,
-              updating: updatingTasks.contains(t.shiftTaskId),
-              onDone: () => onDone(t),
-              onSkip: () => onSkip(t),
-            )),
-        const SizedBox(height: 8),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────
-// TASK CARD
-// ─────────────────────────────────────────────
-
-class _TaskCard extends StatelessWidget {
-  final ShiftTask task;
-  final bool updating;
-  final VoidCallback onDone;
-  final VoidCallback onSkip;
-
-  const _TaskCard({
-    required this.task,
-    required this.updating,
-    required this.onDone,
-    required this.onSkip,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    final isDone = task.isDone;
-    final isSkipped = task.isSkipped;
-    final isPending = task.isPending;
-
-    Color borderColor;
-    Color bgColor;
-
-    if (isDone) {
-      borderColor = Colors.green.withValues(alpha: 0.4);
-      bgColor = Colors.green.withValues(alpha: 0.05);
-    } else if (isSkipped) {
-      borderColor = Colors.orange.withValues(alpha: 0.4);
-      bgColor = Colors.orange.withValues(alpha: 0.05);
-    } else {
-      borderColor = colorScheme.outlineVariant;
-      bgColor = colorScheme.surface;
-    }
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: borderColor),
-        boxShadow: [
-          if (isPending)
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
+      itemBuilder: (context, index) {
+        final task = _tasks[index];
+        return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Task name row
-            Row(
-              children: [
-                if (isDone)
-                  const Icon(Icons.check_circle, color: Colors.green, size: 20)
-                else if (isSkipped)
-                  const Icon(Icons.skip_next, color: Colors.orange, size: 20)
-                else
-                  Icon(Icons.radio_button_unchecked,
-                      color: colorScheme.onSurfaceVariant, size: 20),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    task.taskName,
-                    style: TextStyle(
-                      color: isDone
-                          ? Colors.green
-                          : isSkipped
-                              ? Colors.orange
-                              : colorScheme.onSurface,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                      decoration: isDone ? TextDecoration.lineThrough : null,
-                    ),
-                  ),
-                ),
-                if (task.isTemporary)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: colorScheme.secondaryContainer,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: colorScheme.secondary.withValues(alpha: 0.3)),
-                    ),
-                    child: Text(
-                      'TEMP',
-                      style: TextStyle(
-                          color: colorScheme.secondary,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold),
-                    ),
-                  ),
-              ],
+            Text(
+              task.taskName,
+              style: const TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF3C4043),
+                height: 1.4,
+              ),
             ),
-
-            // Instructions
             if (task.instructions != null && task.instructions!.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.only(left: 30),
-                child: Text(
-                  task.instructions!,
-                  style: TextStyle(
-                    color: colorScheme.onSurfaceVariant,
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-            ],
-
-            // Skip reason
-            if (isSkipped && task.skipReason != null) ...[
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.only(left: 30),
-                child: Row(
-                  children: [
-                    const Icon(Icons.info_outline,
-                        color: Colors.orange, size: 14),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        'Reason: ${task.skipReason}',
-                        style: const TextStyle(
-                            color: Colors.orange, fontSize: 12),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-
-            // Action buttons (only for pending tasks)
-            if (isPending) ...[
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  if (updating)
-                    SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: colorScheme.primary),
-                    )
-                  else ...[
-                    _SmallButton(
-                      label: 'Skip',
-                      icon: Icons.skip_next,
-                      color: Colors.orange,
-                      onTap: onSkip,
-                    ),
-                    const SizedBox(width: 8),
-                    _SmallButton(
-                      label: 'Done',
-                      icon: Icons.check,
-                      color: colorScheme.primary,
-                      onTap: onDone,
-                    ),
-                  ],
-                ],
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SmallButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _SmallButton({
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color.withValues(alpha: 0.4)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: color, size: 14),
-            const SizedBox(width: 4),
-            Text(label,
+              const SizedBox(height: 4),
+              Text(
+                task.instructions!,
                 style: TextStyle(
-                    color: color, fontSize: 12, fontWeight: FontWeight.w600)),
+                  fontSize: 15,
+                  color: Colors.grey.shade600,
+                  height: 1.4,
+                ),
+              ),
+            ],
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 }
 
 // ─────────────────────────────────────────────
-// SKIP REASON DIALOG
+// SKIP REASON DIALOG (Keep but style)
 // ─────────────────────────────────────────────
 
 class _SkipReasonDialog extends StatefulWidget {
@@ -611,87 +318,55 @@ class _SkipReasonDialogState extends State<_SkipReasonDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
     return Dialog(
-      backgroundColor: colorScheme.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                const Icon(Icons.skip_next, color: Colors.orange, size: 22),
-                const SizedBox(width: 8),
-                Text(
-                  'Skip Task',
-                  style: TextStyle(
-                    color: colorScheme.onSurface,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                  ),
-                ),
-              ],
+            const Text(
+              'Skip Task',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
-            Text(
-              'Please provide a reason for skipping this task:',
-              style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 14),
-            ),
-            const SizedBox(height: 12),
             TextField(
               controller: _controller,
               autofocus: true,
-              maxLines: 3,
-              style: TextStyle(color: colorScheme.onSurface),
+              maxLines: 2,
               decoration: InputDecoration(
-                hintText: 'e.g., Client refused, Not applicable today...',
-                hintStyle: TextStyle(color: colorScheme.onSurface.withValues(alpha: 0.3)),
+                hintText: 'Reason for skipping...',
                 filled: true,
-                fillColor: colorScheme.onSurface.withValues(alpha: 0.05),
+                fillColor: Colors.grey.shade50,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(
-                      color: colorScheme.onSurface.withValues(alpha: 0.15)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(
-                      color: colorScheme.onSurface.withValues(alpha: 0.15)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: colorScheme.primary),
+                  borderSide: BorderSide(color: Colors.grey.shade200),
                 ),
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: Text('Cancel',
-                      style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                  child: const Text('Cancel'),
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
+                    backgroundColor: const Color(0xFF1A1A2E),
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   onPressed: () {
                     final reason = _controller.text.trim();
                     if (reason.isEmpty) return;
                     Navigator.pop(context, reason);
                   },
-                  child: const Text('Skip Task'),
+                  child: const Text('Skip'),
                 ),
               ],
             ),
@@ -701,5 +376,3 @@ class _SkipReasonDialogState extends State<_SkipReasonDialog> {
     );
   }
 }
-
-

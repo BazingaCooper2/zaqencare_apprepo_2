@@ -14,34 +14,63 @@ class CarePlanService {
   /// (Per User Rules: One Query, 00:00 to 00:00, filter by shift_start_time)
   Future<List<Shift>> getAllShiftsToday(int empId) async {
     try {
-      debugPrint('📥 One Query: Fetching ALL shifts today for emp=$empId');
+      debugPrint('📥 Fetching ALL shifts today for emp=$empId');
 
       final now = DateTime.now();
       final localToday = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
 
-      // We include 'Accepted' to ensure shifts accepted by the nurse show up.
+      // 1. Fetch raw shifts (Simple select for maximum compatibility)
       final response = await supabase
           .from('shift')
-          .select('''
-*,
-client:client_final!fk_shift_client(
-  *,
-  care_plans(
-    *,
-    care_plan_tasks(*)
-  )
-)
-''')
+          .select('*')
           .eq('emp_id', empId)
           .inFilter('shift_status', ['Scheduled', 'Assigned', 'Accepted', 'clocked_in', 'Clocked in'])
           .eq('date', localToday)
           .order('shift_start_time');
 
-      print('Supabase Response: ${jsonEncode(response)}');
+      final List<Map<String, dynamic>> rawShifts = List<Map<String, dynamic>>.from(response);
+      if (rawShifts.isEmpty) return [];
 
-      return (response as List)
-          .map((e) => Shift.fromJson(e as Map<String, dynamic>))
-          .toList();
+      // 2. Identify unique client IDs
+      final Set<int> clientIds = {};
+      for (final s in rawShifts) {
+        final cidRaw = s['client_id']?.toString();
+        if (cidRaw != null) {
+          final parsed = int.tryParse(cidRaw) ?? double.tryParse(cidRaw)?.toInt();
+          if (parsed != null) clientIds.add(parsed);
+        }
+      }
+
+      // 3. Fetch client details with care plans separately
+      Map<int, Map<String, dynamic>> clientsMap = {};
+      if (clientIds.isNotEmpty) {
+        try {
+          final clientsResponse = await supabase
+              .from('client_final')
+              .select('*, care_plans!care_plans_client_id_fkey(*, care_plan_tasks!care_plan_tasks_care_plan_id_fkey(*))')
+              .inFilter('id', clientIds.toList());
+          
+          for (final c in clientsResponse) {
+            final idRaw = c['id']?.toString();
+            final id = idRaw != null ? (int.tryParse(idRaw) ?? double.tryParse(idRaw)?.toInt()) : null;
+            if (id != null) {
+              clientsMap[id] = Map<String, dynamic>.from(c);
+            }
+          }
+        } catch (e) {
+          debugPrint('⚠️ Error fetching clients in getAllShiftsToday: $e');
+        }
+      }
+
+      // 4. Attach and Parse
+      return rawShifts.map((json) {
+        final cidRaw = json['client_id']?.toString();
+        final cid = cidRaw != null ? (int.tryParse(cidRaw) ?? double.tryParse(cidRaw)?.toInt()) : null;
+        if (cid != null && clientsMap.containsKey(cid)) {
+          json['client'] = clientsMap[cid];
+        }
+        return Shift.fromJson(json);
+      }).toList();
     } catch (e) {
       debugPrint('❌ getAllShiftsToday error: $e');
       return [];
@@ -56,15 +85,56 @@ client:client_final!fk_shift_client(
     try {
       debugPrint('📥 Fetching child shifts for block=$blockShiftId');
 
+      // 1. Fetch raw shifts
       final response = await supabase
           .from('shift')
           .select('*')
           .eq('parent_block_id', blockShiftId)
           .order('shift_start_time');
 
-      return (response as List)
-          .map((e) => Shift.fromJson(e as Map<String, dynamic>))
-          .toList();
+      final List<Map<String, dynamic>> rawShifts = List<Map<String, dynamic>>.from(response);
+      if (rawShifts.isEmpty) return [];
+
+      // 2. Identify unique client IDs
+      final Set<int> clientIds = {};
+      for (final s in rawShifts) {
+        final cidRaw = s['client_id']?.toString();
+        if (cidRaw != null) {
+          final parsed = int.tryParse(cidRaw) ?? double.tryParse(cidRaw)?.toInt();
+          if (parsed != null) clientIds.add(parsed);
+        }
+      }
+
+      // 3. Fetch client details
+      Map<int, Map<String, dynamic>> clientsMap = {};
+      if (clientIds.isNotEmpty) {
+        try {
+          final clientsResponse = await supabase
+              .from('client_final')
+              .select('*, care_plans!care_plans_client_id_fkey(*, care_plan_tasks!care_plan_tasks_care_plan_id_fkey(*))')
+              .inFilter('id', clientIds.toList());
+          
+          for (final c in clientsResponse) {
+            final idRaw = c['id']?.toString();
+            final id = idRaw != null ? (int.tryParse(idRaw) ?? double.tryParse(idRaw)?.toInt()) : null;
+            if (id != null) {
+              clientsMap[id] = Map<String, dynamic>.from(c);
+            }
+          }
+        } catch (e) {
+          debugPrint('⚠️ Error fetching clients in getChildShifts: $e');
+        }
+      }
+
+      // 4. Attach and Parse
+      return rawShifts.map((json) {
+        final cidRaw = json['client_id']?.toString();
+        final cid = cidRaw != null ? (int.tryParse(cidRaw) ?? double.tryParse(cidRaw)?.toInt()) : null;
+        if (cid != null && clientsMap.containsKey(cid)) {
+          json['client'] = clientsMap[cid];
+        }
+        return Shift.fromJson(json);
+      }).toList();
     } catch (e) {
       debugPrint('❌ getChildShifts error: $e');
       return [];
@@ -275,7 +345,7 @@ client:client_final!fk_shift_client(
     try {
       final response = await supabase
           .from('client_final')
-          .select('*')
+          .select('*, care_plans!care_plans_client_id_fkey(*, care_plan_tasks!care_plan_tasks_care_plan_id_fkey(*))')
           .eq('id', clientId)
           .maybeSingle();
 

@@ -41,8 +41,7 @@ class _BlockSlotsScreenState extends State<BlockSlotsScreen> {
       _error = null;
     });
     try {
-      final shifts =
-          await _service.getChildShifts(widget.blockShift.shiftId);
+      final shifts = await _service.getChildShifts(widget.blockShift.shiftId);
       if (mounted) {
         setState(() {
           _childShifts = shifts;
@@ -119,8 +118,7 @@ class _BlockSlotsScreenState extends State<BlockSlotsScreen> {
             Text(_error!, style: TextStyle(color: colorScheme.error)),
             const SizedBox(height: 16),
             ElevatedButton(
-                onPressed: _loadChildShifts,
-                child: const Text('Retry')),
+                onPressed: _loadChildShifts, child: const Text('Retry')),
           ],
         ),
       );
@@ -132,12 +130,13 @@ class _BlockSlotsScreenState extends State<BlockSlotsScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.people_alt_outlined,
-                color: colorScheme.onSurface.withValues(alpha: 0.3), size: 64),
+                color: colorScheme.onSurface.withOpacity(0.3), size: 64),
             const SizedBox(height: 16),
             Text(
               'No slot assignments for this block',
               style: TextStyle(
-                  color: colorScheme.onSurface.withValues(alpha: 0.6), fontSize: 16),
+                  color: colorScheme.onSurface.withOpacity(0.6),
+                  fontSize: 16),
             ),
           ],
         ),
@@ -152,7 +151,7 @@ class _BlockSlotsScreenState extends State<BlockSlotsScreen> {
         itemCount: _childShifts.length,
         itemBuilder: (context, index) {
           final shift = _childShifts[index];
-          
+
           return PremiumShiftCard(
             shift: shift,
             employee: widget.employee,
@@ -172,8 +171,8 @@ class _BlockSlotsScreenState extends State<BlockSlotsScreen> {
                 ? () => Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => ClientDetailsScreen(
-                            clientId: shift.clientId!),
+                        builder: (_) =>
+                            ClientDetailsScreen(clientId: shift.clientId!),
                       ),
                     )
                 : null,

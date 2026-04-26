@@ -7,6 +7,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'providers/theme_provider.dart';
 import 'pages/splash_page.dart';
+import 'services/session.dart';
 
 
 /// ✅ Global Supabase client
@@ -61,8 +62,8 @@ void main() async {
   supabase = Supabase.instance.client;
 
   // Restore session
-  final session = Supabase.instance.client.auth.currentSession;
-  print("APP START AUTH SESSION: ${session?.user.email}");
+  final empId = await SessionManager.getEmpId();
+  print("APP START MANUAL SESSION EMP ID: $empId");
 
   // ✅ Initialize notifications
   try {

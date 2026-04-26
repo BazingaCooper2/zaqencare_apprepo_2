@@ -775,7 +775,7 @@ client:client_final!fk_shift_client(
     );
   }
 
-  bool _permissionDenied = false;
+  final bool _permissionDenied = false;
 
   Future<void> _autoClockIn(String placeName, Position position) async {
     if (_permissionDenied) return;
@@ -790,7 +790,7 @@ client:client_final!fk_shift_client(
       return;
     }
 
-    if (supabase.auth.currentUser == null) {
+    if (!await SessionManager.isLoggedIn()) {
       _showSnackBar('Please log in again.', isError: true);
       return;
     }
@@ -1945,7 +1945,10 @@ care_plans(
       myLocationEnabled: _currentPosition != null,
       myLocationButtonEnabled: false,
       zoomControlsEnabled: false,
-      padding: const EdgeInsets.only(bottom: 280),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).size.height * 0.35,
+        top: MediaQuery.of(context).padding.top + kToolbarHeight,
+      ),
     );
   }
 
@@ -1956,22 +1959,30 @@ care_plans(
       appBar: AppBar(
         title: const Text('Clock in/out',
             style: TextStyle(
-                color: Colors.black87,
-                fontWeight: FontWeight.w600,
-                fontSize: 18)),
-        backgroundColor: Colors.white.withValues(alpha: 0.9),
+                color: Color(0xFF1A1A2E),
+                fontWeight: FontWeight.w700,
+                fontSize: 18,
+                letterSpacing: -0.3)),
+        backgroundColor: Colors.white.withValues(alpha: 0.92),
         elevation: 0,
         centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new,
-              color: Colors.black87, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
+        leading: Container(
+          margin: const EdgeInsets.only(left: 8),
+          child: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new,
+                color: Color(0xFF1A1A2E), size: 18),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.blueAccent),
-            onPressed: _loadActiveShift,
-            tooltip: 'Refresh Shift',
+          Container(
+            margin: const EdgeInsets.only(right: 4),
+            child: IconButton(
+              icon: const Icon(Icons.refresh_rounded,
+                  color: Color(0xFF1A73E8), size: 22),
+              onPressed: _loadActiveShift,
+              tooltip: 'Refresh Shift',
+            ),
           ),
         ],
         shape: const RoundedRectangleBorder(
@@ -1986,28 +1997,59 @@ care_plans(
           // 2. Map Overlay Controls (Recenter FAB)
           Positioned(
             right: 16,
-            top: 130, // Moved to top-right to avoid obstruction
+            top: MediaQuery.of(context).padding.top + kToolbarHeight + 16,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (_activeClient?.latitude != null) ...[
-                  FloatingActionButton(
-                    heroTag: 'client_loc_fab',
-                    onPressed: _moveCameraToClient,
-                    backgroundColor: Colors.white,
-                    mini: true,
-                    tooltip: 'Show Client Location',
-                    child: const Icon(Icons.person_pin_circle,
-                        color: Colors.green),
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.08),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: FloatingActionButton(
+                      heroTag: 'client_loc_fab',
+                      onPressed: _moveCameraToClient,
+                      backgroundColor: Colors.white,
+                      elevation: 0,
+                      mini: true,
+                      tooltip: 'Show Client Location',
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                      child: const Icon(Icons.person_pin_circle_rounded,
+                          color: Color(0xFF43A047), size: 22),
+                    ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                 ],
-                FloatingActionButton(
-                  heroTag: 'recenter_fab',
-                  onPressed: _moveCameraToUser,
-                  backgroundColor: Colors.white,
-                  tooltip: 'My Location',
-                  child: const Icon(Icons.my_location, color: Colors.black87),
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: FloatingActionButton(
+                    heroTag: 'recenter_fab',
+                    onPressed: _moveCameraToUser,
+                    backgroundColor: Colors.white,
+                    elevation: 0,
+                    tooltip: 'My Location',
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                    child: const Icon(Icons.my_location_rounded,
+                        color: Color(0xFF1A73E8), size: 22),
+                  ),
                 ),
               ],
             ),
@@ -2016,41 +2058,50 @@ care_plans(
           // 3. Loading Overlay for GPS
           if (_currentPosition == null)
             Positioned(
-              top: 120,
+              top: MediaQuery.of(context).padding.top + kToolbarHeight + 16,
               left: 20,
               right: 20,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  color: Colors.black87.withValues(alpha: 0.8),
-                  borderRadius: BorderRadius.circular(30),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.2),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A1A2E).withValues(alpha: 0.85),
+                    borderRadius: BorderRadius.circular(30),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.18),
+                        blurRadius: 14,
+                        offset: const Offset(0, 4),
                       ),
-                    ),
-                    SizedBox(width: 12),
-                    Text(
-                      'Acquiring precise location...',
-                      style: TextStyle(color: Colors.white, fontSize: 13),
-                    ),
-                  ],
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xFF4FC3F7),
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Flexible(
+                        child: Text(
+                          'Acquiring precise location...',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 0.2,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -2063,14 +2114,14 @@ care_plans(
             builder: (context, scrollController) {
               return Container(
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: const Color(0xFFF9FAFB),
                   borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(30)),
+                      const BorderRadius.vertical(top: Radius.circular(28)),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.15),
-                      blurRadius: 20,
-                      offset: const Offset(0, -5),
+                      color: Colors.black.withValues(alpha: 0.12),
+                      blurRadius: 24,
+                      offset: const Offset(0, -6),
                     ),
                   ],
                 ),
@@ -2078,7 +2129,7 @@ care_plans(
                   controller: scrollController,
                   child: SafeArea(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 2),
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2086,76 +2137,104 @@ care_plans(
                           // Handle bar for visual affordance
                           Center(
                             child: Container(
-                              width: 40,
-                              height: 4,
-                              margin: const EdgeInsets.only(bottom: 2),
+                              width: 48,
+                              height: 5,
+                              margin: const EdgeInsets.symmetric(vertical: 12),
                               decoration: BoxDecoration(
                                 color: Colors.grey.shade300,
-                                borderRadius: BorderRadius.circular(2),
+                                borderRadius: BorderRadius.circular(3),
                               ),
                             ),
                           ),
                           // Status Header
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: _isClockedIn
-                                      ? Colors.green.withValues(alpha: 0.1)
-                                      : Colors.orange.withValues(alpha: 0.1),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  _isClockedIn
-                                      ? Icons.check_circle_rounded
-                                      : Icons.timer_outlined,
-                                  color: _isClockedIn
-                                      ? Colors.green
-                                      : Colors.orange,
-                                  size: 24,
-                                ),
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: _isClockedIn
+                                    ? const Color(0xFF4CAF50).withValues(alpha: 0.15)
+                                    : Colors.grey.shade200,
                               ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    if (_isClockedIn && _clockInTimeUtc != null)
-                                      Text(
-                                        'Clocked In at ${DateFormat('h:mm a').format(_clockInTimeUtc!.toLocal())}',
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          color: Colors.grey.shade600,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      )
-                                    else
-                                      Text(
-                                        'Ready to Start',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          color: Colors.grey.shade600,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      _isClockedIn
-                                          ? 'Clocked In'
-                                          : 'Clocked Out',
-                                      style: const TextStyle(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.black87,
-                                      ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.04),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 48,
+                                  height: 48,
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: _isClockedIn
+                                          ? [const Color(0xFF4CAF50).withValues(alpha: 0.15), const Color(0xFF4CAF50).withValues(alpha: 0.05)]
+                                          : [const Color(0xFFFF9800).withValues(alpha: 0.15), const Color(0xFFFF9800).withValues(alpha: 0.05)],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
                                     ),
-                                  ],
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  child: Icon(
+                                    _isClockedIn
+                                        ? Icons.check_circle_rounded
+                                        : Icons.timer_outlined,
+                                    color: _isClockedIn
+                                        ? const Color(0xFF2E7D32)
+                                        : const Color(0xFFE65100),
+                                    size: 26,
+                                  ),
                                 ),
-                              ),
-                              if (_isClockedIn && _clockInTimeUtc != null)
-                                _LiveTimer(startTime: _clockInTimeUtc!),
-                            ],
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      if (_isClockedIn && _clockInTimeUtc != null)
+                                        Text(
+                                          'Since ${DateFormat('h:mm a').format(_clockInTimeUtc!.toLocal())}',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.grey.shade500,
+                                            fontWeight: FontWeight.w500,
+                                            letterSpacing: 0.1,
+                                          ),
+                                        )
+                                      else
+                                        Text(
+                                          'Ready to Start',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.grey.shade500,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      const SizedBox(height: 3),
+                                        Text(
+                                          _isClockedIn ? 'Clocked In' : 'Clocked Out',
+                                          style: TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w700,
+                                            color: _isClockedIn
+                                                ? const Color(0xFF2E7D32)
+                                                : const Color(0xFF1A1A2E),
+                                            letterSpacing: -0.3,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                if (_isClockedIn && _clockInTimeUtc != null)
+                                  _LiveTimer(startTime: _clockInTimeUtc!),
+                              ],
+                            ),
                           ),
 
                           const SizedBox(height: 16),
@@ -2220,379 +2299,549 @@ care_plans(
                           if (_activeShift == null &&
                               !_loadingActiveShift &&
                               _todayShifts.isEmpty)
-                            const Padding(
-                              padding: EdgeInsets.only(bottom: 16),
-                              child: Text(
-                                'No shift scheduled',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: Colors.orange,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 12),
+                              margin: const EdgeInsets.only(bottom: 14),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFF3E0),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                    color: const Color(0xFFFFE0B2)),
+                              ),
+                              child: const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.event_busy_rounded,
+                                      color: Color(0xFFE65100), size: 18),
+                                  SizedBox(width: 8),
+                                  Flexible(
+                                    child: Text(
+                                      'No shift scheduled',
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        color: Color(0xFFE65100),
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           Row(
                             children: [
                               Expanded(
-                                child: ElevatedButton(
-                                  onPressed:
-                                      _canManualClockIn ? _manualClockIn : null,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.blue,
-                                    foregroundColor: Colors.white,
-                                    disabledBackgroundColor:
-                                        Colors.grey.shade300,
-                                    disabledForegroundColor:
-                                        Colors.grey.shade500,
-                                    elevation: 0,
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 12),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                  child: _manualClockingIn
-                                      ? const SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                              color: Colors.white,
-                                              strokeWidth: 2),
-                                        )
-                                      : const Text('Clock In',
-                                          style: TextStyle(fontSize: 16)),
-                                ),
+                                child: _canManualClockIn
+                                    ? InkWell(
+                                        onTap: _manualClockIn,
+                                        borderRadius:
+                                            BorderRadius.circular(14),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 14),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF1A73E8),
+                                            borderRadius:
+                                                BorderRadius.circular(14),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: const Color(0xFF1A73E8)
+                                                    .withValues(alpha: 0.3),
+                                                blurRadius: 8,
+                                                offset: const Offset(0, 3),
+                                              ),
+                                            ],
+                                          ),
+                                          alignment: Alignment.center,
+                                          child: _manualClockingIn
+                                              ? const SizedBox(
+                                                  width: 20,
+                                                  height: 20,
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                    color: Colors.white,
+                                                    strokeWidth: 2,
+                                                  ),
+                                                )
+                                              : const Text(
+                                                  'Clock In',
+                                                  style: TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.bold,
+                                                    letterSpacing: 0.5,
+                                                  ),
+                                                ),
+                                        ),
+                                      )
+                                    : Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 14),
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey.shade200,
+                                          borderRadius:
+                                              BorderRadius.circular(14),
+                                        ),
+                                        alignment: Alignment.center,
+                                        child: Text(
+                                          'Clock In',
+                                          style: TextStyle(
+                                            color: Colors.grey.shade500,
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
                               ),
-                              const SizedBox(width: 16),
+                              const SizedBox(width: 14),
                               Expanded(
-                                child: OutlinedButton(
-                                  onPressed: _canManualClockOut
-                                      ? _manualClockOut
-                                      : null,
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: Colors.grey.shade700,
-                                    disabledForegroundColor:
-                                        Colors.grey.shade400,
-                                    side: BorderSide(
-                                      color: _canManualClockOut
-                                          ? Colors.grey.shade700
-                                          : Colors.grey.shade300,
-                                    ),
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 12),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                  child: _manualClockingOut
-                                      ? const SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                              color: Colors.grey,
-                                              strokeWidth: 2),
-                                        )
-                                      : const Text('Clock Out',
-                                          style: TextStyle(fontSize: 16)),
-                                ),
+                                child: _canManualClockOut
+                                    ? InkWell(
+                                        onTap: _manualClockOut,
+                                        borderRadius:
+                                            BorderRadius.circular(14),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 14),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFD32F2F),
+                                            borderRadius:
+                                                BorderRadius.circular(14),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: const Color(0xFFD32F2F)
+                                                    .withValues(alpha: 0.3),
+                                                blurRadius: 8,
+                                                offset: const Offset(0, 3),
+                                              ),
+                                            ],
+                                          ),
+                                          alignment: Alignment.center,
+                                          child: _manualClockingOut
+                                              ? const SizedBox(
+                                                  width: 20,
+                                                  height: 20,
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                    color: Colors.white,
+                                                    strokeWidth: 2,
+                                                  ),
+                                                )
+                                              : const Text(
+                                                  'Clock Out',
+                                                  style: TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.bold,
+                                                    letterSpacing: 0.5,
+                                                  ),
+                                                ),
+                                        ),
+                                      )
+                                    : Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 14),
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey.shade100,
+                                          borderRadius:
+                                              BorderRadius.circular(14),
+                                          border: Border.all(
+                                              color: Colors.grey.shade300),
+                                        ),
+                                        alignment: Alignment.center,
+                                        child: Text(
+                                          'Clock Out',
+                                          style: TextStyle(
+                                            color: Colors.grey.shade400,
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 14),
+
 
                           // Active Shift Info Card
                           if (_loadingActiveShift)
                             const Padding(
-                              padding: EdgeInsets.all(20.0),
-                              child: Center(child: CircularProgressIndicator()),
+                              padding: EdgeInsets.symmetric(vertical: 30),
+                              child: Center(
+                                  child: CircularProgressIndicator(
+                                      color: Color(0xFF1A73E8))),
                             )
                           else if (_activeShift != null)
                             Column(
                               children: [
                                 Container(
-                                  padding: const EdgeInsets.all(16),
+                                  padding: const EdgeInsets.all(20),
                                   decoration: BoxDecoration(
-                                    color: Colors.blue.withValues(alpha: 0.05),
-                                    borderRadius: BorderRadius.circular(16),
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(20),
                                     border: Border.all(
-                                        color:
-                                            Colors.blue.withValues(alpha: 0.1)),
+                                        color: Colors.grey.shade100),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black
+                                            .withValues(alpha: 0.03),
+                                        blurRadius: 15,
+                                        offset: const Offset(0, 5),
+                                      ),
+                                    ],
                                   ),
-                                  child: Row(
+                                  child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(8),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white,
-                                          borderRadius:
-                                              BorderRadius.circular(10),
-                                        ),
-                                        child: const Icon(
-                                            Icons.person_outline_rounded,
-                                            color: Colors.blue),
+                                      Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.all(10),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFE3F2FD),
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                            ),
+                                            child: const Icon(
+                                              Icons.person_outline_rounded,
+                                              color: Color(0xFF1976D2),
+                                              size: 24,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 14),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  _activeClient?.fullName ?? 'Client details loading...',
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 17,
+                                                    color: Color(0xFF1A1A2E),
+                                                    letterSpacing: -0.3,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                                if (_activeClient
+                                                            ?.serviceType !=
+                                                        null &&
+                                                    _activeClient!
+                                                        .serviceType!
+                                                        .isNotEmpty)
+                                                  Padding(
+                                                    padding: const EdgeInsets
+                                                        .only(top: 2),
+                                                    child: Text(
+                                                      _activeClient!
+                                                          .serviceType!,
+                                                      style: TextStyle(
+                                                        color: Colors.blue
+                                                            .shade700,
+                                                        fontSize: 13,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                          ),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 8, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: Colors.grey.shade100,
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            child: Text(
+                                              '#${_activeShift!.shiftId}',
+                                              style: TextStyle(
+                                                color: Colors.grey.shade600,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
+                                      const SizedBox(height: 16),
+                                      const Divider(height: 1),
+                                      const SizedBox(height: 16),
+                                      Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.calendar_today_rounded,
+                                            size: 16,
+                                            color: Color(0xFF1A73E8),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Flexible(
+                                            child: Text(
+                                              _activeShift!.clockFormattedDate,
+                                              style: const TextStyle(
+                                                fontSize: 13,
+                                                color: Color(0xFF1A1A2E),
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          const Spacer(),
+                                          const Icon(
+                                            Icons.access_time_rounded,
+                                            size: 16,
+                                            color: Color(0xFF1A73E8),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Flexible(
+                                            child: Text(
+                                              _activeShift!.clockFormattedTimeRangeWithDuration,
+                                              style: const TextStyle(
+                                                fontSize: 13,
+                                                color: Color(0xFF1A1A2E),
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      if (_activeClient != null &&
+                                          _activeClient!
+                                              .fullAddress.isNotEmpty) ...[
+                                        const SizedBox(height: 12),
+                                        Row(
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
                                           children: [
-                                            Text(
-                                              _activeClient?.fullName ??
-                                                  'Client details loading...',
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 15,
+                                            const Icon(
+                                              Icons.location_on_outlined,
+                                              size: 16,
+                                              color: Color(0xFF1A73E8),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                _activeClient!.fullAddress,
+                                                style: TextStyle(
+                                                  color: Colors.grey.shade600,
+                                                  fontSize: 13,
+                                                  height: 1.4,
+                                                ),
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
                                               ),
                                             ),
-                                            if (_activeClient?.serviceType !=
-                                                    null &&
-                                                _activeClient!
-                                                    .serviceType!.isNotEmpty)
-                                              Padding(
-                                                padding: const EdgeInsets.only(
-                                                    top: 2),
-                                                child: Text(
-                                                  _activeClient!.serviceType!,
-                                                  style: TextStyle(
-                                                    color: Colors.blue.shade700,
-                                                    fontSize: 13,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                ),
-                                              ),
-                                            // Get Directions Button
-                                            Padding(
-                                              padding:
-                                                  const EdgeInsets.only(top: 4),
-                                              child: InkWell(
-                                                onTap: _launchExternalMaps,
-                                                child: Row(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: [
-                                                    Icon(
-                                                      Icons.directions,
-                                                      size: 16,
-                                                      color:
-                                                          Colors.blue.shade700,
-                                                    ),
-                                                    const SizedBox(width: 4),
-                                                    Text(
-                                                      'Get Directions',
-                                                      style: TextStyle(
-                                                        color: Colors
-                                                            .blue.shade700,
-                                                        fontSize: 12,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        decoration:
-                                                            TextDecoration
-                                                                .underline,
+                                          ],
+                                        ),
+                                      ],
+                                      const SizedBox(height: 16),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: IntrinsicHeight(
+                                              child: Row(
+                                                children: [
+                                                  if (_currentPosition !=
+                                                          null &&
+                                                      _activeClient
+                                                              ?.latitude !=
+                                                          null &&
+                                                      _activeClient
+                                                              ?.longitude !=
+                                                          null) ...[
+                                                    const Icon(
+                                                        Icons
+                                                            .directions_car_rounded,
+                                                        size: 16,
+                                                        color:
+                                                            Color(0xFF1A73E8)),
+                                                    const SizedBox(width: 8),
+                                                    Flexible(
+                                                      child: Text(
+                                                        _routeDistance != null && _routeDuration != null
+                                                            ? '$_routeDistance • $_routeDuration'
+                                                            : '${(_calculateDistance(
+                                                                  _currentPosition!.latitude,
+                                                                  _currentPosition!.longitude,
+                                                                  _activeClient!.latitude!,
+                                                                  _activeClient!.longitude!,
+                                                                ) / 1000).toStringAsFixed(1)} km away',
+                                                        style: const TextStyle(
+                                                          color: Color(0xFF1A1A2E),
+                                                          fontSize: 13,
+                                                          fontWeight: FontWeight.w600,
+                                                        ),
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow.ellipsis,
                                                       ),
                                                     ),
                                                   ],
-                                                ),
-                                              ),
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              '${_activeShift!.clockFormattedDate}  •  ${_activeShift!.clockFormattedTimeRangeWithDuration}',
-                                              style: TextStyle(
-                                                color: Colors.grey.shade600,
-                                                fontSize: 12,
-                                              ),
-                                            ),
-                                            if (_activeClient != null &&
-                                                _activeClient!.fullAddress
-                                                    .isNotEmpty) ...[
-                                              const SizedBox(height: 4),
-                                              Row(
-                                                children: [
-                                                  Icon(
-                                                      Icons
-                                                          .location_on_outlined,
-                                                      size: 14,
-                                                      color:
-                                                          Colors.grey.shade500),
-                                                  const SizedBox(width: 4),
-                                                  Expanded(
-                                                    child: Text(
-                                                      _activeClient!
-                                                          .fullAddress,
-                                                      style: TextStyle(
-                                                        color: Colors
-                                                            .grey.shade500,
-                                                        fontSize: 11,
-                                                      ),
-                                                      maxLines: 1,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                    ),
-                                                  ),
                                                 ],
                                               ),
-                                            ],
-                                            if (_currentPosition != null &&
-                                                _activeClient?.latitude != null &&
-                                                _activeClient?.longitude != null) ...[
-                                              const SizedBox(height: 4),
-                                              Row(
-                                                children: [
-                                                  Icon(Icons.directions_car,
-                                                      size: 14,
-                                                      color:
-                                                          Colors.blue.shade400),
-                                                  const SizedBox(width: 4),
-                                                  Text(
-                                                    _routeDistance != null &&
-                                                            _routeDuration !=
-                                                                null
-                                                        ? '$_routeDistance • $_routeDuration'
-                                                        : '${(_calculateDistance(
-                                                              _currentPosition!
-                                                                  .latitude,
-                                                              _currentPosition!
-                                                                  .longitude,
-                                                              _activeClient!.latitude!,
-                                                              _activeClient!.longitude!,
-                                                            ) / 1000).toStringAsFixed(2)} km away',
-                                                    style: TextStyle(
-                                                      color:
-                                                          Colors.blue.shade600,
-                                                      fontSize: 11,
-                                                      fontWeight:
-                                                          FontWeight.w500,
-                                                    ),
-                                                  ),
-                                                  if (_routeDistance == null)
-                                                    Padding(
-                                                      padding:
-                                                          const EdgeInsets.only(
-                                                              left: 8.0),
-                                                      child: GestureDetector(
-                                                        onTap: () {
-                                                          _updateRouteToClient();
-                                                          _moveCameraToClient(); // Or bounds
-                                                        },
-                                                        child: const Text(
-                                                          'Show Route',
-                                                          style: TextStyle(
-                                                              color:
-                                                                  Colors.blue,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .bold,
-                                                              fontSize: 11,
-                                                              decoration:
-                                                                  TextDecoration
-                                                                      .underline),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                ],
-                                              ),
-                                            ],
-                                          ],
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: Colors.grey
-                                              .withValues(alpha: 0.15),
-                                          borderRadius:
-                                              BorderRadius.circular(6),
-                                        ),
-                                        child: Text(
-                                          '#${_activeShift!.shiftId}',
-                                          style: TextStyle(
-                                            color: Colors.grey.shade700,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
+                                            ),
                                           ),
-                                        ),
+                                          TextButton.icon(
+                                            onPressed: _launchExternalMaps,
+                                            icon: const Icon(Icons.directions,
+                                                size: 16),
+                                            label: const Text('Directions'),
+                                            style: TextButton.styleFrom(
+                                              foregroundColor:
+                                                  const Color(0xFF1A73E8),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 8),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                                side: const BorderSide(
+                                                    color: Color(0xFFE3F2FD)),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ],
                                   ),
                                 ),
 
                                 // Inline Tasks Section (Visible Always)
-                                const Divider(height: 32),
-                                const Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: Text(
-                                    'Shift Tasks',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
+                                const Divider(height: 48, thickness: 0.5),
+                                Row(
+                                  children: [
+                                    Container(
+                                      width: 4,
+                                      height: 18,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF1A73E8),
+                                        borderRadius: BorderRadius.circular(2),
+                                      ),
                                     ),
-                                  ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        'Shift Tasks',
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF1A1A2E),
+                                          letterSpacing: -0.3,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    if (!_loadingTasks && _tasks.isNotEmpty)
+                                      Text(
+                                        '${_tasks.where((t) => t.status || t.shiftTaskLogStatus == 'skipped').length}/${_tasks.length} Done',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.grey.shade600,
+                                        ),
+                                      ),
+                                  ],
                                 ),
-                                const SizedBox(height: 8),
+                                const SizedBox(height: 16),
                                 if (_loadingTasks)
                                   const Center(
                                       child: Padding(
-                                    padding: EdgeInsets.all(16),
-                                    child: CircularProgressIndicator(),
+                                    padding: EdgeInsets.all(24),
+                                    child: CircularProgressIndicator(
+                                        color: Color(0xFF1A73E8)),
                                   ))
                                 else if (_tasks.isEmpty)
                                   Container(
-                                    padding: const EdgeInsets.all(16),
+                                    padding: const EdgeInsets.all(24),
                                     width: double.infinity,
                                     decoration: BoxDecoration(
-                                      color: _activeShift!.isBlockChild
-                                          ? const Color(0xFFF1F6F5)
-                                          : Colors.blue.withValues(alpha: 0.05),
-                                      borderRadius: BorderRadius.circular(16),
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(20),
                                       border: Border.all(
-                                        color: _activeShift!.isBlockChild
-                                            ? const Color(0xFFE0EAE8)
-                                            : Colors.blue.withValues(alpha: 0.1),
-                                      ),
+                                          color: Colors.grey.shade100),
                                     ),
-                                    child: Text(
-                                      'No tasks assigned for this shift.',
-                                      style: TextStyle(
-                                          color: Colors.grey.shade600),
-                                      textAlign: TextAlign.center,
+                                    child: Column(
+                                      children: [
+                                        Icon(Icons.assignment_turned_in_rounded,
+                                            size: 32,
+                                            color: Colors.grey.shade300),
+                                        const SizedBox(height: 12),
+                                        Text(
+                                          'No tasks assigned for this shift.',
+                                          style: TextStyle(
+                                              color: Colors.grey.shade500,
+                                              fontSize: 14),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ],
                                     ),
                                   )
                                 else
                                   Column(
-                                    children: List.generate(_tasks.length, (index) {
+                                    children:
+                                        List.generate(_tasks.length, (index) {
                                       final task = _tasks[index];
-                                      return Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          InkWell(
-                                            onTap: _isClockedIn &&
-                                                    task.shiftTaskLogStatus !=
-                                                        'skipped'
+                                      final isSkipped =
+                                          task.shiftTaskLogStatus == 'skipped';
+                                      return Container(
+                                        margin:
+                                            const EdgeInsets.only(bottom: 10),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                          border: Border.all(
+                                            color: task.status
+                                                ? const Color(0xFFE8F5E9)
+                                                : isSkipped
+                                                    ? const Color(0xFFFFF3E0)
+                                                    : Colors.grey.shade100,
+                                          ),
+                                        ),
+                                        child: Material(
+                                          color: Colors.transparent,
+                                          child: InkWell(
+                                            onTap: _isClockedIn && !isSkipped
                                                 ? () => _toggleTask(
                                                     task, !task.status)
                                                 : null,
+                                            borderRadius:
+                                                BorderRadius.circular(16),
                                             child: Padding(
                                               padding:
-                                                  const EdgeInsets.symmetric(
-                                                      vertical: 4.0,
-                                                      horizontal: 8.0),
+                                                  const EdgeInsets.fromLTRB(
+                                                      4, 8, 12, 8),
                                               child: Row(
                                                 children: [
                                                   Checkbox(
                                                     value: task.status,
                                                     onChanged: _isClockedIn &&
-                                                            task.shiftTaskLogStatus !=
-                                                                'skipped'
+                                                            !isSkipped
                                                         ? (val) => _toggleTask(
                                                             task, val ?? false)
                                                         : null,
-                                                    activeColor: Colors.blue,
+                                                    activeColor:
+                                                        const Color(0xFF4CAF50),
+                                                    shape:
+                                                        RoundedRectangleBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              6),
+                                                    ),
                                                   ),
                                                   Expanded(
                                                     child: Text(
@@ -2601,48 +2850,45 @@ care_plans(
                                                       style: TextStyle(
                                                         decoration: task
                                                                     .status ||
-                                                                task.shiftTaskLogStatus ==
-                                                                    'skipped'
+                                                                isSkipped
                                                             ? TextDecoration
                                                                 .lineThrough
                                                             : null,
                                                         fontSize: 14,
-                                                        color:
-                                                            task.shiftTaskLogStatus ==
-                                                                    'skipped'
-                                                                ? Colors.orange
-                                                                : (task.status
-                                                                    ? Colors
-                                                                        .grey
-                                                                    : Colors
-                                                                        .black87),
+                                                        fontWeight:
+                                                            FontWeight.w500,
+                                                        color: isSkipped
+                                                            ? const Color(
+                                                                0xFFE65100)
+                                                            : (task.status
+                                                                ? Colors.grey
+                                                                : const Color(
+                                                                    0xFF1A1A2E)),
                                                       ),
                                                     ),
                                                   ),
                                                   if (_isClockedIn &&
-                                                      task.shiftTaskLogStatus !=
-                                                          'skipped')
+                                                      !isSkipped)
                                                     TextButton(
                                                       onPressed: () =>
                                                           _promptSkipTask(task),
                                                       child: const Text('Skip',
                                                           style: TextStyle(
-                                                              color:
-                                                                  Colors.orange,
+                                                              color: Color(
+                                                                  0xFFE65100),
                                                               fontWeight:
                                                                   FontWeight
-                                                                      .bold)),
+                                                                      .bold,
+                                                              fontSize: 13)),
                                                     )
-                                                  else if (task
-                                                          .shiftTaskLogStatus ==
-                                                      'skipped')
+                                                  else if (isSkipped)
                                                     const Padding(
                                                       padding: EdgeInsets.only(
-                                                          right: 16.0),
+                                                          right: 8.0),
                                                       child: Text('Skipped',
                                                           style: TextStyle(
-                                                              color:
-                                                                  Colors.orange,
+                                                              color: Color(
+                                                                  0xFFE65100),
                                                               fontWeight:
                                                                   FontWeight
                                                                       .bold,
@@ -2652,89 +2898,121 @@ care_plans(
                                               ),
                                             ),
                                           ),
-                                          if (task.shiftTaskLogStatus ==
-                                                  'skipped' &&
-                                              task.skipReason != null &&
-                                              task.skipReason!.isNotEmpty)
-                                            Padding(
-                                              padding: const EdgeInsets.only(
-                                                  left: 48.0,
-                                                  bottom: 8.0,
-                                                  right: 16.0),
-                                              child: Text(
-                                                'Reason: ${task.skipReason}',
-                                                style: TextStyle(
-                                                    color: Colors.grey.shade600,
-                                                    fontSize: 13,
-                                                    fontStyle:
-                                                        FontStyle.italic),
-                                              ),
-                                            ),
-                                        ],
+                                        ),
                                       );
                                     }),
                                   ),
+
                                 // Progress Note Section
-                                const Divider(height: 32),
-                                const Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: Text(
-                                    'Progress Note',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
+                                const Divider(height: 32, thickness: 0.5),
+                                Row(
+                                  children: [
+                                    Container(
+                                      width: 4,
+                                      height: 18,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF1A73E8),
+                                        borderRadius: BorderRadius.circular(2),
+                                      ),
                                     ),
-                                  ),
+                                    const SizedBox(width: 10),
+                                    const Text(
+                                      'Progress Note',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF1A1A2E),
+                                        letterSpacing: -0.2,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                                 const SizedBox(height: 12),
                                 TextField(
                                   controller: _progressNoteController,
                                   maxLines: 4,
+                                  style: const TextStyle(
+                                      fontSize: 14,
+                                      color: Color(0xFF1A1A2E)),
                                   decoration: InputDecoration(
-                                    hintText: 'Enter clinical progress note...',
+                                    hintText:
+                                        'Enter clinical progress note...',
                                     hintStyle: TextStyle(
                                         fontSize: 14,
                                         color: Colors.grey.shade400),
-                                    fillColor: Colors.grey.shade50,
+                                    fillColor: Colors.white,
                                     filled: true,
                                     border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
+                                      borderRadius:
+                                          BorderRadius.circular(14),
                                       borderSide: BorderSide(
                                           color: Colors.grey.shade200),
                                     ),
                                     enabledBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
+                                      borderRadius:
+                                          BorderRadius.circular(14),
                                       borderSide: BorderSide(
                                           color: Colors.grey.shade200),
                                     ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius:
+                                          BorderRadius.circular(14),
+                                      borderSide: const BorderSide(
+                                          color: Color(0xFF1A73E8),
+                                          width: 1.5),
+                                    ),
+                                    contentPadding: const EdgeInsets.all(14),
                                   ),
                                 ),
                                 const SizedBox(height: 12),
-                                ElevatedButton(
-                                  onPressed:
-                                      _isSavingNote ? null : _saveProgressNote,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.blue.shade700,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 14),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    elevation: 0,
-                                  ),
-                                  child: _isSavingNote
-                                      ? const SizedBox(
-                                          width: 20,
-                                          height: 20,
+                                _isSavingNote
+                                    ? Container(
+                                        height: 52,
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey.shade100,
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                        ),
+                                        alignment: Alignment.center,
+                                        child: const SizedBox(
+                                          width: 24,
+                                          height: 24,
                                           child: CircularProgressIndicator(
+                                              color: Color(0xFF1A73E8),
+                                              strokeWidth: 2.5),
+                                        ),
+                                      )
+                                    : InkWell(
+                                        onTap: _saveProgressNote,
+                                        borderRadius:
+                                            BorderRadius.circular(16),
+                                        child: Container(
+                                          height: 52,
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF1A73E8),
+                                            borderRadius:
+                                                BorderRadius.circular(16),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: const Color(0xFF1A73E8)
+                                                    .withValues(alpha: 0.3),
+                                                blurRadius: 10,
+                                                offset: const Offset(0, 4),
+                                              ),
+                                            ],
+                                          ),
+                                          alignment: Alignment.center,
+                                          child: const Text(
+                                            'Save Progress Note',
+                                            style: TextStyle(
                                               color: Colors.white,
-                                              strokeWidth: 2))
-                                      : const Text('Save Note',
-                                          style: TextStyle(
-                                              fontSize: 15,
-                                              fontWeight: FontWeight.bold)),
-                                ),
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.bold,
+                                              letterSpacing: 0.5,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
                                 const SizedBox(height: 20),
                               ],
                             ),
@@ -2794,19 +3072,36 @@ class _LiveTimerState extends State<_LiveTimer> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.green.shade50,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.green.shade100),
-      ),
-      child: Text(
-        _formattedDuration,
-        style: TextStyle(
-          color: Colors.green.shade700,
-          fontWeight: FontWeight.bold,
-          fontFamily: 'monospace',
+        gradient: const LinearGradient(
+          colors: [Color(0xFFE8F5E9), Color(0xFFC8E6C9)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFA5D6A7)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.access_time_rounded,
+            size: 13,
+            color: Color(0xFF2E7D32),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            _formattedDuration,
+            style: const TextStyle(
+              color: Color(0xFF1B5E20),
+              fontWeight: FontWeight.w700,
+              fontFamily: 'monospace',
+              fontSize: 13,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -106,7 +106,8 @@ class _InjuryReportFormState extends State<InjuryReportForm> {
     setState(() => _isSubmitting = true);
 
     try {
-      if (SessionManager.empId == null) {
+      final empId = await SessionManager.getEmpId();
+      if (empId == null) {
         if (mounted) {
           context.showSnackBar('You must be logged in to submit a report.',
               isError: true);
@@ -130,7 +131,7 @@ class _InjuryReportFormState extends State<InjuryReportForm> {
       print("CURRENT USER: ${supabase.auth.currentUser}");
       print("CURRENT SESSION: ${supabase.auth.currentSession}");
       print("SESSION USER ID: ${supabase.auth.currentUser?.id}");
-      print("EMP ID BEING SENT: ${SessionManager.empId}");
+      print("EMP ID BEING SENT: $empId");
 
       final data = {
         'date': DateFormat('yyyy-MM-dd').format(_selectedDate!),
@@ -140,7 +141,7 @@ class _InjuryReportFormState extends State<InjuryReportForm> {
         'description': _descriptionController.text.trim(),
         'severity': _selectedSeverity,
         'status': _selectedStatus,
-        'emp_id': SessionManager.empId,
+        'emp_id': empId,
         'signature_url': _uploadedSignatureUrl,
         'reporter_name': _reportingEmployeeController.text.trim(),
         'created_at': DateTime.now().toIso8601String(),

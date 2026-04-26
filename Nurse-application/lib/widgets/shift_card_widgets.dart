@@ -3,7 +3,7 @@ import '../models/shift.dart';
 import '../models/employee.dart';
 
 // ─────────────────────────────────────────────
-// SHARED SHIFT CARD WIDGET (Screenshot 3 Style)
+// SHARED SHIFT CARD WIDGET
 // ─────────────────────────────────────────────
 
 class IndividualShiftCard extends StatelessWidget {
@@ -37,248 +37,196 @@ class IndividualShiftCard extends StatelessWidget {
     final formattedDate = shift.clockFormattedDate;
     final timeRangeWithDuration = shift.clockFormattedTimeRangeWithDuration;
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 20),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: Colors.grey.shade200),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.grey.shade100),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header: Status Badge & ID
-            Wrap(
-              spacing: 12,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                _buildStatusBadge(statusText, statusColor),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '#${shift.shiftId}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                ),
-                if (shift.isBlockChild)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.purple.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.purple.shade200),
-                    ),
-                    child: const Text(
-                      'Visit inside Block',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.purple,
-                      ),
-                    ),
-                  )
-                else if (shift.isStandalone)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.indigo.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.indigo.shade200),
-                    ),
-                    child: const Text(
-                      'Standalone Visit',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.indigo,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            
-            // Client Icon and Name
-            Row(
-              children: [
-                Icon(Icons.person_pin_rounded, color: Colors.teal.shade700, size: 28),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    shift.clientName ?? 'Unknown Client',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF202124),
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // Date & Time Box (Teal Box style from SC 3)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF1F6F5),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE0EAE8)),
-              ),
+            // Top Accent Bar based on status
+            Container(height: 6, color: statusColor),
+            Padding(
+              padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Header: Status Badge & ID
                   Row(
                     children: [
-                      const Icon(Icons.calendar_today_rounded, size: 20, color: Color(0xFF2E7D6B)),
+                      _buildStatusBadge(statusText, statusColor),
                       const SizedBox(width: 10),
-                      Flexible(
-                        child: Text(
-                          formattedDate,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16,
-                            color: Color(0xFF202124),
-                          ),
+                      if (shift.isBlockChild)
+                        _buildTypeBadge('Visit inside Block', Colors.purple)
+                      else if (shift.isStandalone)
+                        _buildTypeBadge('Standalone Visit', Colors.indigo),
+                      const Spacer(),
+                      Text(
+                        '#${shift.shiftId}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey.shade400,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 20),
+                  
+                  // Client Info Section
                   Row(
                     children: [
-                      const Icon(Icons.access_time_rounded, size: 20, color: Color(0xFF2E7D6B)),
-                      const SizedBox(width: 10),
-                      Flexible(
-                        child: Text(
-                          timeRangeWithDuration,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
-                            color: Color(0xFF202124),
-                          ),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Icon(Icons.person_outline_rounded, 
+                          color: Colors.blue.shade700, size: 28),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              shift.clientName ?? 'Unknown Client',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF1A1A2E),
+                                letterSpacing: -0.3,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              shift.department ?? 'Care Service',
+                              style: TextStyle(
+                                color: Colors.grey.shade600,
+                                fontSize: 13,
+                              ),
+                            ),
+                            if (shift.client?.phoneMain != null && shift.client!.phoneMain!.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Icon(Icons.phone_rounded, size: 12, color: Colors.grey.shade500),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    shift.client!.phoneMain!,
+                                    style: TextStyle(
+                                      color: Colors.grey.shade500,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                     ],
                   ),
+                  const SizedBox(height: 24),
+
+                  // DateTime Row
+                  IntrinsicHeight(
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _buildInfoItem(
+                            Icons.calendar_today_rounded,
+                            formattedDate,
+                            'Date',
+                          ),
+                        ),
+                        VerticalDivider(width: 1, thickness: 1, color: Colors.grey.shade100),
+                        Expanded(
+                          child: _buildInfoItem(
+                            Icons.access_time_rounded,
+                            timeRangeWithDuration,
+                            'Time Slot',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Action Buttons
+                  Row(
+                    children: [
+                      if (!isClockedIn && onClockIn != null)
+                        Expanded(
+                          child: _buildActionButton(
+                            onPressed: isClockingIn ? null : onClockIn,
+                            label: 'Clock In',
+                            icon: Icons.play_arrow_rounded,
+                            color: const Color(0xFF1A73E8),
+                            isLoading: isClockingIn,
+                          ),
+                        )
+                      else if (isClockedIn && onClockOut != null)
+                        Expanded(
+                          child: _buildActionButton(
+                            onPressed: isClockingOut ? null : onClockOut,
+                            label: 'Clock Out',
+                            icon: Icons.stop_rounded,
+                            color: const Color(0xFFD32F2F),
+                            isLoading: isClockingOut,
+                          ),
+                        ),
+                      if ((!isClockedIn && onClockIn != null) || 
+                          (isClockedIn && onClockOut != null))
+                        const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildActionButton(
+                          onPressed: onViewTasks,
+                          label: 'View Tasks',
+                          icon: Icons.assignment_rounded,
+                          color: const Color(0xFF1A1A2E),
+                          isSecondary: true,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (onViewDetails != null) ...[
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: TextButton.icon(
+                        onPressed: onViewDetails,
+                        icon: const Icon(Icons.info_outline_rounded, size: 18),
+                        label: const Text('View Client Details', 
+                          style: TextStyle(fontWeight: FontWeight.bold)),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.blue.shade700,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(color: Colors.blue.shade100),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
-            ),
-            const SizedBox(height: 20),
-
-            // Action Buttons (Clock In/Out, View Details, View Tasks)
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              alignment: WrapAlignment.end,
-              children: [
-                if (!isClockedIn && onClockIn != null)
-                  ElevatedButton.icon(
-                    onPressed: isClockingIn ? null : onClockIn,
-                    icon: isClockingIn
-                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.play_arrow_rounded, size: 18),
-                    label: const Text('Clock In', style: TextStyle(fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                  ),
-                if (isClockedIn && onClockOut != null)
-                  ElevatedButton.icon(
-                    onPressed: isClockingOut ? null : onClockOut,
-                    icon: isClockingOut
-                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.stop_rounded, size: 18),
-                    label: const Text('Clock Out', style: TextStyle(fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                  ),
-                if (onViewDetails != null)
-                  OutlinedButton(
-                    onPressed: onViewDetails,
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF00695C),
-                      side: const BorderSide(color: Color(0xFFAED581)),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    child: const Text('View Details', style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                ElevatedButton.icon(
-                  onPressed: onViewTasks,
-                  icon: const Icon(Icons.assignment_rounded, size: 18),
-                  label: const Text('View Tasks', style: TextStyle(fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE3F2FD),
-                    foregroundColor: const Color(0xFF1976D2),
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      side: const BorderSide(color: Color(0xFFBBDEFB)),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // Duration & Overtime Summary Boxes
-            Row(
-              children: [
-                Expanded(
-                  child: _buildSummaryBox(
-                    'Duration',
-                    () {
-                      final h = shift.clockDurationHours;
-                      if (h == null) return 'N/A';
-                      final hrs = h.floor();
-                      final mins = ((h - hrs) * 60).round();
-                      return mins > 0 ? '${hrs}h ${mins}m' : '${hrs}h';
-                    }(),
-                    const Color(0xFFE3F2FD),
-                    const Color(0xFF1976D2),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildSummaryBox(
-                    'Overtime',
-                    () {
-                      final h = shift.clockDurationHours;
-                      if (h == null) return 'N/A';
-                      final ot = h > 8 ? h - 8 : 0.0;
-                      final hrs = ot.floor();
-                      final mins = ((ot - hrs) * 60).round();
-                      return mins > 0 ? '${hrs}h ${mins}m' : '${hrs}h';
-                    }(),
-                    const Color(0xFFFFF3E0),
-                    const Color(0xFFE65100),
-                  ),
-                ),
-              ],
             ),
           ],
         ),
@@ -286,53 +234,118 @@ class IndividualShiftCard extends StatelessWidget {
     );
   }
 
-  Widget _buildStatusBadge(String text, Color color) {
+  Widget _buildTypeBadge(String text, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withOpacity(0.5), width: 1.5),
+        color: color.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.1)),
       ),
       child: Text(
         text,
         style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
           color: color,
-          fontWeight: FontWeight.w800,
-          fontSize: 13,
-          letterSpacing: 0.3,
         ),
       ),
     );
   }
 
-  Widget _buildSummaryBox(String label, String value, Color bgColor, Color textColor) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: textColor.withOpacity(0.8),
+  Widget _buildInfoItem(IconData icon, String text, String label) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 14, color: const Color(0xFF1A73E8)),
+            const SizedBox(width: 6),
+            Text(label, style: TextStyle(color: Colors.grey.shade500, fontSize: 11, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Padding(
+          padding: const EdgeInsets.only(left: 20),
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              color: Color(0xFF1A1A2E),
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-              color: textColor,
-            ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionButton({
+    required VoidCallback? onPressed,
+    required String label,
+    required IconData icon,
+    required Color color,
+    bool isSecondary = false,
+    bool isLoading = false,
+  }) {
+    return Container(
+      height: 48,
+      decoration: BoxDecoration(
+        color: isSecondary ? Colors.white : color,
+        borderRadius: BorderRadius.circular(12),
+        border: isSecondary ? Border.all(color: Colors.grey.shade200) : null,
+        boxShadow: isSecondary ? null : [
+          BoxShadow(
+            color: color.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
           ),
         ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(12),
+          child: Center(
+            child: isLoading
+                ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: isSecondary ? color : Colors.white))
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(icon, size: 18, color: isSecondary ? color : Colors.white),
+                      const SizedBox(width: 8),
+                      Text(
+                        label,
+                        style: TextStyle(
+                          color: isSecondary ? color : Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusBadge(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        text.toUpperCase(),
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w900,
+          fontSize: 11,
+          letterSpacing: 0.5,
+        ),
       ),
     );
   }

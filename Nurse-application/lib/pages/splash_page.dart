@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:nurse_tracking_app/pages/login_page.dart';
 import 'package:nurse_tracking_app/pages/dashboard_page.dart';
+import 'package:nurse_tracking_app/services/session.dart';
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -22,7 +23,7 @@ class _SplashPageState extends State<SplashPage> {
     await Future.delayed(const Duration(seconds: 1));
     if (!mounted) return;
 
-    final isUserLoggedIn = Supabase.instance.client.auth.currentSession != null;
+    final isUserLoggedIn = await SessionManager.isLoggedIn();
     if (!mounted) return;
 
     if (isUserLoggedIn) {
@@ -45,4 +46,3 @@ class _SplashPageState extends State<SplashPage> {
     );
   }
 }
-

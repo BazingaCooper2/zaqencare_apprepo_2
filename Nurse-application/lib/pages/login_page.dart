@@ -33,34 +33,17 @@ class _LoginPageState extends State<LoginPage> {
         return;
       }
 
-      Map<String, dynamic>? employee;
-      debugPrint('🔍 Attempting login for: $email');
+      debugPrint('🔍 Attempting manual login for: $email');
 
-      // ✅ Step 1: Login via Supabase Auth
-      final authResponse =
-          await Supabase.instance.client.auth.signInWithPassword(
-        email: email,
-        password: password,
-      );
+      // ✅ Step 1: Query database directly for email and password
+      final List<dynamic> response = await Supabase.instance.client
+          .from(Tables.employee)
+          .select()
+          .eq('email', email)
+          .eq('password', password)
+          .limit(1);
 
-      final user = authResponse.user;
-      if (user != null) {
-        debugPrint('✅ Logged in via Supabase Auth as ${user.email}');
-
-        // ✅ Step 2: Fetch employee record
-        final List<dynamic> empResponse = await Supabase.instance.client
-            .from(Tables.employee)
-            .select(
-                'emp_id, first_name, last_name, email, designation, image_url, Employee_status')
-            .eq('email', user.email ?? email)
-            .limit(1);
-
-        if (empResponse.isNotEmpty) {
-          employee = empResponse.first as Map<String, dynamic>;
-        }
-      }
-
-      if (employee == null) {
+      if (response.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Invalid email or password.')),
@@ -70,13 +53,11 @@ class _LoginPageState extends State<LoginPage> {
         return;
       }
 
-      // ✅ Ensure emp_id is linked to auth.uid() for RLS
-      try {
-        final empId = await SessionManager.getOrCreateEmployeeLink();
-        print("Logged in employee id: $empId");
-      } catch (e) {
-        debugPrint('⚠️ RLS link error: $e');
-      }
+      final employee = response.first as Map<String, dynamic>;
+      debugPrint('✅ Logged in manually as ${employee['email']}');
+
+      // ✅ Step 2: Save session locally
+      await SessionManager.saveSession(employee);
 
       // ✅ Navigate to dashboard
       if (mounted) {
@@ -122,15 +103,15 @@ class _LoginPageState extends State<LoginPage> {
 
     final effectiveCard = isDark ? const Color(0xFF111E30) : Colors.white;
     final effectiveTitle = isDark ? Colors.white : const Color(0xFF0B1628);
-    final effectiveSubtitle = const Color(0xFF8896A8);
+    const effectiveSubtitle = Color(0xFF8896A8);
     final effectiveInputBg =
         isDark ? const Color(0xFF18273D) : const Color(0xFFF3F7FB);
     final effectiveInputBorder =
         isDark ? const Color(0xFF243350) : const Color(0xFFDDE4EE);
     final effectiveInputText = isDark ? Colors.white : const Color(0xFF0B1628);
-    final effectiveLabel = const Color(0xFF8896A8);
+    const effectiveLabel = Color(0xFF8896A8);
 
-    InputDecoration _field({
+    InputDecoration field({
       required String label,
       required String hint,
       required Widget prefix,
@@ -138,7 +119,7 @@ class _LoginPageState extends State<LoginPage> {
     }) =>
         InputDecoration(
           labelText: label,
-          labelStyle: TextStyle(
+          labelStyle: const TextStyle(
               fontSize: 13, color: effectiveLabel, fontWeight: FontWeight.w500),
           hintText: hint,
           hintStyle: TextStyle(
@@ -308,7 +289,7 @@ class _LoginPageState extends State<LoginPage> {
                                             ),
                                           ),
                                           const SizedBox(height: 3),
-                                          Text(
+                                          const Text(
                                             'Sign in to continue',
                                             style: TextStyle(
                                               fontSize: 13,
@@ -357,10 +338,10 @@ class _LoginPageState extends State<LoginPage> {
                                   textInputAction: TextInputAction.next,
                                   style: TextStyle(
                                       fontSize: 14, color: effectiveInputText),
-                                  decoration: _field(
+                                  decoration: field(
                                     label: 'Email address',
                                     hint: 'nurse@hospital.com',
-                                    prefix: Icon(Icons.email_outlined,
+                                    prefix: const Icon(Icons.email_outlined,
                                         size: 18, color: effectiveLabel),
                                   ),
                                 ),
@@ -374,10 +355,10 @@ class _LoginPageState extends State<LoginPage> {
                                   onFieldSubmitted: (_) => _signIn(),
                                   style: TextStyle(
                                       fontSize: 14, color: effectiveInputText),
-                                  decoration: _field(
+                                  decoration: field(
                                     label: 'Password',
                                     hint: '••••••••',
-                                    prefix: Icon(Icons.lock_outline,
+                                    prefix: const Icon(Icons.lock_outline,
                                         size: 18, color: effectiveLabel),
                                     suffix: IconButton(
                                       onPressed: () => setState(() =>

@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
 import '../services/care_plan_service.dart';
 
 /// ✅ ClientDetailsScreen
-/// Fetches and displays full client profile from client_final table.
+/// Displays a premium summary of client/shift details as shown in the modern UI design.
 class ClientDetailsScreen extends StatefulWidget {
   final int clientId;
 
@@ -50,593 +49,170 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
     return Scaffold(
-      appBar: AppBar(
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          'Client Details',
-          style: TextStyle(
-            color: colorScheme.onSurface,
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-          ),
-        ),
+      backgroundColor: const Color(0xFFE8F0EE), // Premium light mint background
+      body: SafeArea(
+        child: _buildBody(),
       ),
-      body: _buildBody(theme, colorScheme),
     );
   }
 
-  Widget _buildBody(ThemeData theme, ColorScheme colorScheme) {
+  Widget _buildBody() {
     if (_loading) {
-      return Center(
-          child: CircularProgressIndicator(color: colorScheme.primary));
+      return const Center(child: CircularProgressIndicator(color: Color(0xFF1A1A2E)));
     }
 
     if (_error != null) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error_outline, color: colorScheme.error, size: 48),
-            const SizedBox(height: 12),
-            Text(_error!, style: TextStyle(color: colorScheme.error)),
-            const SizedBox(height: 16),
-            ElevatedButton(onPressed: _loadClient, child: const Text('Retry')),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline_rounded, color: Colors.orange, size: 48),
+              const SizedBox(height: 16),
+              const Text('Something went wrong', 
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text(_error!, textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade600)),
+              const SizedBox(height: 24),
+              ElevatedButton(onPressed: _loadClient, child: const Text('Retry')),
+            ],
+          ),
         ),
       );
     }
 
-    if (_client == null) {
-      return Center(
-        child: Text('Client not found',
-            style:
-                TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 16)),
-      );
-    }
+    if (_client == null) return const Center(child: Text('Client not found'));
 
     final c = _client!;
     final fullName = '${c['first_name'] ?? ''} ${c['last_name'] ?? ''}'.trim();
-    final preferredName = c['preferred_name'] as String?;
-    final displayName = preferredName != null && preferredName.isNotEmpty
-        ? preferredName
-        : fullName;
+    final address = c['address'] ?? 'Not provided';
+    final serviceType = c['service_type'] ?? 'Outreach';
+    final status = c['status'] ?? 'Active';
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          // Avatar + name header
-          _ClientHeader(name: displayName, client: c),
-          const SizedBox(height: 16),
-
-          // Contact Info
-          _InfoSection(
-            title: 'Contact Information',
-            icon: Icons.contact_phone_outlined,
-            color: colorScheme.primary,
-            children: [
-              _InfoRow(label: 'Phone', value: c['phone_main']),
-              _InfoRow(label: 'Alt Phone', value: c['phone_other']),
-              _InfoRow(label: 'Email', value: c['email']),
-              _InfoRow(
-                  label: 'Preferred Contact', value: c['communication_method']),
-            ],
-          ),
-
-          // Address
-          _InfoSection(
-            title: 'Address',
-            icon: Icons.location_on_outlined,
-            color: Colors.orange,
-            children: [
-              _InfoRow(label: 'Address', value: c['address']),
-              _InfoRow(label: 'Line 2', value: c['address_line2']),
-              _InfoRow(label: 'City', value: c['city']),
-              _InfoRow(label: 'Province', value: c['province']),
-              _InfoRow(label: 'Postal Code', value: c['zip']),
-              _InfoRow(label: 'Country', value: c['country']),
-            ],
-          ),
-
-          // Medical
-          _InfoSection(
-            title: 'Medical Information',
-            icon: Icons.medical_information_outlined,
-            color: Colors.red.shade400,
-            children: [
-              _InfoRow(
-                  label: 'Primary Diagnosis', value: c['primary_diagnosis']),
-              _InfoRow(label: 'Risks', value: c['risks']),
-              _InfoRow(label: 'Service Type', value: c['service_type']),
-              _InfoRow(label: 'Doctor', value: c['doctor']),
-              _InfoRow(label: 'Nurse', value: c['nurse']),
-              if (c['wheelchair_user'] == true)
-                const _BoolBadge(
-                    label: 'Wheelchair User', icon: Icons.accessible),
-              if (c['has_catheter'] == true)
-                const _BoolBadge(
-                    label: 'Has Catheter',
-                    icon: Icons.medical_services_outlined),
-              if (c['requires_oxygen'] == true)
-                const _BoolBadge(label: 'Requires Oxygen', icon: Icons.air),
-            ],
-          ),
-
-          // Medical Notes (JSONB)
-          if (_hasJsonContent(c['medical_notes']))
-            _JsonSection(
-              title: 'Medical Notes',
-              icon: Icons.notes_outlined,
-              color: Colors.purple.shade300,
-              data: c['medical_notes'],
+    return Column(
+      children: [
+        const SizedBox(height: 12),
+        // Drag handle for modal feel
+        Center(
+          child: Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(2),
             ),
-
-          // Instructions
-          if (_hasValue(c['instructions']))
-            _InfoSection(
-              title: 'Care Instructions',
-              icon: Icons.assignment_outlined,
-              color: colorScheme.secondary,
-              children: [
-                _InfoRow(value: c['instructions']),
-              ],
-            ),
-
-          // Emergency Contacts (JSONB)
-          if (_hasJsonContent(c['emergency_contacts']))
-            _EmergencyContactsSection(data: c['emergency_contacts']),
-
-          // Coordinator
-          _InfoSection(
-            title: 'Coordinator',
-            icon: Icons.support_agent_outlined,
-            color: Colors.teal,
-            children: [
-              _InfoRow(
-                  label: 'Coordinator', value: c['client_coordinator_name']),
-              _InfoRow(label: 'Notes', value: c['coordinator_notes']),
-            ],
           ),
-
-          const SizedBox(height: 24),
-        ],
-      ),
-    );
-  }
-
-  bool _hasValue(dynamic v) => v != null && v.toString().trim().isNotEmpty;
-
-  bool _hasJsonContent(dynamic v) {
-    if (v == null) return false;
-    if (v is Map) return v.isNotEmpty;
-    if (v is List) return v.isNotEmpty;
-    if (v is String) {
-      try {
-        final decoded = jsonDecode(v);
-        if (decoded is Map) return decoded.isNotEmpty;
-        if (decoded is List) return decoded.isNotEmpty;
-      } catch (_) {}
-    }
-    return false;
-  }
-}
-
-// ─────────────────────────────────────────────
-// CLIENT HEADER
-// ─────────────────────────────────────────────
-
-class _ClientHeader extends StatelessWidget {
-  final String name;
-  final Map<String, dynamic> client;
-
-  const _ClientHeader({required this.name, required this.client});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    final imageUrl = client['image_url'] as String?;
-    final gender = client['gender'] as String?;
-    final status = client['status'] as String?;
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: colorScheme.outlineVariant),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+        ),
+        const SizedBox(height: 24),
+        
+        // Title
+        const Text(
+          'Shift Details',
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF1A1A2E),
+            letterSpacing: -0.5,
           ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // Avatar
-          CircleAvatar(
-            radius: 36,
-            backgroundColor: colorScheme.primary.withValues(alpha: 0.1),
-            backgroundImage: imageUrl != null && imageUrl.isNotEmpty
-                ? NetworkImage(imageUrl)
-                : null,
-            child: imageUrl == null || imageUrl.isEmpty
-                ? Text(
-                    name.isNotEmpty ? name[0].toUpperCase() : '?',
-                    style: TextStyle(
-                      color: colorScheme.primary,
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  )
-                : null,
-          ),
-          const SizedBox(width: 16),
-          Expanded(
+        ),
+        const SizedBox(height: 12),
+        
+        // Status Badge
+        _buildStatusBadge(status),
+        const SizedBox(height: 48),
+
+        // Detail Rows
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  name,
-                  style: TextStyle(
-                    color: colorScheme.onSurface,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                if (gender != null && gender.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    gender,
-                    style: TextStyle(
-                        color: colorScheme.onSurfaceVariant, fontSize: 14),
-                  ),
-                ],
-                if (status != null && status.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: Colors.green.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                          color: Colors.green.withValues(alpha: 0.4)),
-                    ),
-                    child: Text(
-                      status,
-                      style: const TextStyle(
-                          color: Colors.green,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
+                _buildDetailsRow('Client Name', fullName),
+                const SizedBox(height: 24),
+                _buildDetailsRow('Phone Number', c['phone_main'] ?? 'Not provided'),
+                const SizedBox(height: 24),
+                _buildDetailsRow('Location', address),
+                const SizedBox(height: 24),
+                _buildDetailsRow('Service Type', serviceType),
+                const SizedBox(height: 24),
+                _buildDetailsRow('Skills Required', 'None specified'),
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
+        ),
 
-// ─────────────────────────────────────────────
-// INFO SECTION
-// ─────────────────────────────────────────────
-
-class _InfoSection extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  final Color color;
-  final List<Widget> children;
-
-  const _InfoSection({
-    required this.title,
-    required this.icon,
-    required this.color,
-    required this.children,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    // Filter out rows with no value
-    final visible =
-        children.where((w) => w is! _InfoRow || w.value != null).toList();
-    if (visible.isEmpty) return const SizedBox.shrink();
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Section header
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-            child: Row(
-              children: [
-                Icon(icon, color: color, size: 18),
-                const SizedBox(width: 8),
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Divider(height: 1, color: colorScheme.outlineVariant),
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(children: visible),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────
-// INFO ROW
-// ─────────────────────────────────────────────
-
-class _InfoRow extends StatelessWidget {
-  final String? label;
-  final dynamic value;
-
-  const _InfoRow({this.label, this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    if (value == null || value.toString().trim().isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (label != null) ...[
-            SizedBox(
-              width: 120,
-              child: Text(
-                label!,
-                style: TextStyle(
-                    color: colorScheme.onSurfaceVariant, fontSize: 13),
+        // Primary Action: Close
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+          child: SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1A73E8),
+                foregroundColor: Colors.white,
+                elevation: 4,
+                shadowColor: Colors.black.withOpacity(0.2),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Close',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
             ),
-            const SizedBox(width: 8),
-          ],
-          Expanded(
-            child: Text(
-              value.toString(),
-              style: TextStyle(color: colorScheme.onSurface, fontSize: 14),
-            ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
-}
 
-// ─────────────────────────────────────────────
-// BOOL BADGE
-// ─────────────────────────────────────────────
-
-class _BoolBadge extends StatelessWidget {
-  final String label;
-  final IconData icon;
-
-  const _BoolBadge({required this.label, required this.icon});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        children: [
-          Icon(icon, color: Colors.red.shade400, size: 16),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: TextStyle(
-                color: Colors.red.shade400,
-                fontSize: 13,
-                fontWeight: FontWeight.w600),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────
-// JSON SECTION (medical notes, etc.)
-// ─────────────────────────────────────────────
-
-class _JsonSection extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  final Color color;
-  final dynamic data;
-
-  const _JsonSection({
-    required this.title,
-    required this.icon,
-    required this.color,
-    required this.data,
-  });
-
-  String _stringify(dynamic v) {
-    if (v is String) return v;
-    if (v is Map || v is List) {
-      return const JsonEncoder.withIndent('  ').convert(v);
-    }
-    return v.toString();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
+  Widget _buildStatusBadge(String status) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
       decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.outlineVariant),
+        color: const Color(0xFFD6EBE0), // Light green bg
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFAED581).withOpacity(0.5)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-            child: Row(
-              children: [
-                Icon(icon, color: color, size: 18),
-                const SizedBox(width: 8),
-                Text(title,
-                    style: TextStyle(
-                        color: color,
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ),
-          Divider(height: 1, color: colorScheme.outlineVariant),
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Text(
-              _stringify(data),
-              style: TextStyle(
-                  color: colorScheme.onSurface, fontSize: 13, height: 1.5),
-            ),
-          ),
-        ],
+      child: Text(
+        status.toUpperCase(),
+        style: const TextStyle(
+          color: Color(0xFF2E7D32), // Dark green text
+          fontWeight: FontWeight.bold,
+          fontSize: 14,
+          letterSpacing: 0.5,
+        ),
       ),
     );
   }
-}
 
-// ─────────────────────────────────────────────
-// EMERGENCY CONTACTS SECTION
-// ─────────────────────────────────────────────
-
-class _EmergencyContactsSection extends StatelessWidget {
-  final dynamic data;
-
-  const _EmergencyContactsSection({required this.data});
-
-  List<Map<String, dynamic>> _parse() {
-    try {
-      if (data is List) {
-        return (data as List).whereType<Map<String, dynamic>>().toList();
-      }
-      if (data is String) {
-        final decoded = jsonDecode(data);
-        if (decoded is List) {
-          return decoded.whereType<Map<String, dynamic>>().toList();
-        }
-      }
-    } catch (_) {}
-    return [];
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    final contacts = _parse();
-    if (contacts.isEmpty) return const SizedBox.shrink();
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 14, 16, 10),
-            child: Row(
-              children: [
-                Icon(Icons.emergency_outlined, color: Colors.red, size: 18),
-                SizedBox(width: 8),
-                Text(
-                  'Emergency Contacts',
-                  style: TextStyle(
-                      color: Colors.red,
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
+  Widget _buildDetailsRow(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.grey.shade600,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
           ),
-          Divider(height: 1, color: colorScheme.outlineVariant),
-          ...contacts.asMap().entries.map((e) {
-            final idx = e.key;
-            final contact = e.value;
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Contact ${idx + 1}${contact['name'] != null ? ': ${contact['name']}' : ''}',
-                    style: TextStyle(
-                        color: colorScheme.onSurface,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14),
-                  ),
-                  if (contact['relationship'] != null)
-                    _InfoRow(
-                        label: 'Relationship', value: contact['relationship']),
-                  if (contact['phone'] != null)
-                    _InfoRow(label: 'Phone', value: contact['phone']),
-                  if (contact['email'] != null)
-                    _InfoRow(label: 'Email', value: contact['email']),
-                  const SizedBox(height: 8),
-                  if (idx < contacts.length - 1)
-                    Divider(height: 1, color: colorScheme.outlineVariant),
-                ],
-              ),
-            );
-          }),
-          const SizedBox(height: 6),
-        ],
-      ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Color(0xFF1A1A2E),
+            fontSize: 17,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Divider(color: Colors.grey.shade300, thickness: 0.8),
+      ],
     );
   }
 }
